@@ -1,13 +1,32 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { ElectionLayout } from "@/components/ElectionLayout";
+import { VoteInterface } from "@/components/VoteInterface";
+import { CandidateManagement } from "@/components/CandidateManagement";
+import { ResultsDashboard } from "@/components/ResultsDashboard";
+import { AdminDashboard } from "@/components/AdminDashboard";
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState("vote");
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case "vote":
+        return <VoteInterface />;
+      case "candidates":
+        return <CandidateManagement />;
+      case "results":
+        return <ResultsDashboard />;
+      case "admin":
+        return <AdminDashboard />;
+      default:
+        return <VoteInterface />;
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <ElectionLayout activeTab={activeTab} onTabChange={setActiveTab}>
+      {renderContent()}
+    </ElectionLayout>
   );
 };
 
