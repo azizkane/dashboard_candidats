@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -40,10 +41,11 @@ const mockResults = [
 ];
 
 const totalVotes = mockResults.reduce((sum, candidate) => sum + candidate.votes, 0);
-const participation = 78.5; // Pourcentage de participation
+const participation = 78.5;
 const totalEligibleVoters = 11742;
 
 export const ResultsDashboard = () => {
+  const navigate = useNavigate();
   const winner = mockResults[0];
 
   return (
@@ -64,9 +66,7 @@ export const ResultsDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalVotes.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              votes exprimés
-            </p>
+            <p className="text-xs text-muted-foreground">votes exprimés</p>
           </CardContent>
         </Card>
 
@@ -90,9 +90,7 @@ export const ResultsDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">87%</div>
-            <p className="text-xs text-muted-foreground">
-              156 sur 180 bureaux
-            </p>
+            <p className="text-xs text-muted-foreground">156 sur 180 bureaux</p>
           </CardContent>
         </Card>
 
@@ -103,9 +101,7 @@ export const ResultsDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-success">+2.3%</div>
-            <p className="text-xs text-muted-foreground">
-              vs. estimation
-            </p>
+            <p className="text-xs text-muted-foreground">vs. estimation</p>
           </CardContent>
         </Card>
       </div>
@@ -139,56 +135,31 @@ export const ResultsDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Résultats détaillés */}
+      {/* Cartes d’élections cliquables */}
       <Card>
         <CardHeader>
-          <CardTitle>Résultats par candidat</CardTitle>
+          <CardTitle>Liste des élections</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {mockResults.map((candidate, index) => (
-            <div key={candidate.id} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-muted-foreground w-6">
-                    #{index + 1}
-                  </span>
-                  <img 
-                    src={candidate.photo}
-                    alt={candidate.name}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                  <div>
-                    <p className="font-medium">{candidate.name}</p>
-                    <p className="text-sm text-muted-foreground">{candidate.party}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-lg">{candidate.percentage}%</p>
-                  <p className="text-sm text-muted-foreground">
-                    {candidate.votes.toLocaleString()} votes
-                  </p>
+        <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {mockResults.map((candidate) => (
+            <div
+              key={candidate.id}
+              onClick={() => navigate(`/election/${candidate.id}/candidats`)}
+              className="cursor-pointer border rounded-xl p-4 hover:shadow-md transition"
+            >
+              <div className="flex items-center gap-4">
+                <img
+                  src={candidate.photo}
+                  alt={candidate.name}
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+                <div>
+                  <h3 className="text-lg font-semibold">{candidate.name}</h3>
+                  <p className="text-sm text-muted-foreground">{candidate.party}</p>
                 </div>
               </div>
-              <Progress 
-                value={candidate.percentage} 
-                className="h-2"
-              />
             </div>
           ))}
-        </CardContent>
-      </Card>
-
-      {/* Évolution en temps réel */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Évolution des votes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Graphique d'évolution en temps réel</p>
-            <p className="text-sm">(Mise à jour toutes les 5 minutes)</p>
-          </div>
         </CardContent>
       </Card>
     </div>
