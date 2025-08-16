@@ -12,14 +12,30 @@ interface PV {
   date_generation: string;
   statut: boolean | number | string;
   contenu_pdf: string;
-  election: {
-    titre: string;
-  };
+  election: { titre: string };
 }
 
+// Skeleton de carte (UI only)
+const PvSkeleton: React.FC = () => (
+  <Card className="shadow-xl border border-blue-100">
+    <CardContent className="p-5 space-y-3">
+      <div className="h-5 w-40 bg-gray-200 rounded animate-pulse" />
+      <div className="h-4 w-56 bg-gray-200 rounded animate-pulse" />
+      <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+      <div className="mt-4 h-8 w-36 bg-gray-200 rounded animate-pulse mx-auto" />
+    </CardContent>
+  </Card>
+);
+
 const PVList: React.FC = () => {
-  const [pvs, setPvs] = useState<PV[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Rendu immédiat si déjà consulté
+  const cached: PV[] = (() => {
+    try { return JSON.parse(localStorage.getItem('pvs_actifs') || '[]'); }
+    catch { return []; }
+  })();
+
+  const [pvs, setPvs] = useState<PV[]>(cached);
+  const [loading, setLoading] = useState(false); // on garde le state, mais on n’affiche plus de texte
   const [error, setError] = useState('');
 
   const fetchPVs = async () => {
@@ -34,19 +50,17 @@ const PVList: React.FC = () => {
       }
 
       const res = await axios.get('http://127.0.0.1:8000/api/liste_pvs_actifs', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      console.log("Réponse API :", res.data);
-
+      // même logique de filtrage
       if (Array.isArray(res.data.data)) {
-        const actifs = res.data.data.filter((pv: PV) =>
-          pv.statut === true || pv.statut === 1 || pv.statut === '1'
+        const actifs = res.data.data.filter(
+          (pv: PV) => pv.statut === true || pv.statut === 1 || pv.statut === '1'
         );
-        console.log("PVs actifs filtrés :", actifs);
         setPvs(actifs);
+        // on mémorise pour le prochain affichage instantané
+        localStorage.setItem('pvs_actifs', JSON.stringify(actifs));
       } else {
         setError("Format inattendu de la réponse API.");
       }
@@ -60,6 +74,7 @@ const PVList: React.FC = () => {
 
   useEffect(() => {
     fetchPVs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -76,16 +91,23 @@ const PVList: React.FC = () => {
 
           {error && <p className="text-red-500 text-center mb-4">{error}</p>}
 
-          {loading ? (
-            <p className="text-blue-600 text-center">Chargement en cours...</p>
-          ) : (
+          {/* si on charge: squelettes (pas de texte “Chargement…”) */}
+          {loading && (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => <PvSkeleton key={i} />)}
+            </div>
+          )}
+
+          {/* sinon affichage normal */}
+          {!loading && (
             <>
               {pvs.length === 0 ? (
                 <div className="text-center text-gray-500">
-                  Aucun PV actif trouvé.<br />
-                  <pre className="text-xs text-left text-red-500 mt-4">
+                  Aucun PV actif trouvé.
+                  {/* Debug conservé si tu veux garder ta trace */}
+                  {/* <pre className="text-xs text-left text-red-500 mt-4">
                     Debug : {JSON.stringify(pvs, null, 2)}
-                  </pre>
+                  </pre> */}
                 </div>
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

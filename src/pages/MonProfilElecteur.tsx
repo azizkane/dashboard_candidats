@@ -23,58 +23,99 @@ const Layout = ({ children }: { children: React.ReactNode }) => (
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
-    
-      <FooterElecteur />
-    
+    <FooterElecteur />
   </div>
 );
 
-const MonProfilElecteur = () => {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState<UserData>({
-    id: 0,
-    nom: '',
-    prenom: '',
-    email: '',
-    role: '',
-    profil: '',
-  });
+// Skeleton simple (optionnel)
+const Skel = ({ className = '' }: { className?: string }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
+);
 
+const MonProfilElecteur = () => {
+  // 1) Rendu instantané depuis le cache
+  const cached = (() => {
+    try { return JSON.parse(localStorage.getItem('me') || 'null') as UserData | null; }
+    catch { return null; }
+  })();
+
+  const [user, setUser] = useState<UserData | null>(cached);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [avatarVersion, setAvatarVersion] = useState<number>(0);
+  const [formData, setFormData] = useState<UserData>(
+    cached ?? { id: 0, nom: '', prenom: '', email: '', role: '', profil: '' }
+  );
+
+  // 2) Rafraîchissement silencieux depuis l’API (sans écran "Chargement...")
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
-    if (token) {
-      axios
-        .get('http://127.0.0.1:8000/api/user', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((res) => {
-          setUser(res.data);
-          setFormData(res.data);
-        });
-    }
+    if (!token) return;
+
+    axios.get('http://127.0.0.1:8000/api/user', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    .then((res) => {
+      const fresh = res.data as UserData;
+      setUser(fresh);
+      setFormData(fresh);
+      localStorage.setItem('me', JSON.stringify(fresh));
+    })
+    .catch(() => {
+      // on garde le cache si l’appel échoue
+    });
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // 3) Sauvegarde avec UI optimiste (affichage immédiat des modifs)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('auth_token');
-    if (token && user) {
-      axios
-        .put(`http://127.0.0.1:8000/api/users/${user.id}`, formData, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((res) => {
-          setUser(res.data);
-          setEditMode(false);
-        });
-    }
+    if (!token || !formData.id) return;
+
+    setSaving(true);
+    const prev = user;
+
+    // UI optimiste: on affiche tout de suite les nouvelles valeurs
+    setUser(formData);
+    localStorage.setItem('me', JSON.stringify(formData));
+
+    axios.put(`http://127.0.0.1:8000/api/users/${formData.id}`, formData, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    })
+    .then((res) => {
+      // Gère {user: {...}} ou {data: {...}} ou {...}
+      const updated =
+        (res.data && (res.data.user || res.data.data)) ? (res.data.user || res.data.data) :
+        (typeof res.data === 'object' ? res.data : formData);
+
+      setUser(updated);
+      setFormData(updated);
+      localStorage.setItem('me', JSON.stringify(updated));
+      setEditMode(false);
+
+      // Si la photo a changé, on "buste" le cache une seule fois
+      setAvatarVersion(Date.now());
+    })
+    .catch((err) => {
+      // rollback si échec
+      if (prev) {
+        setUser(prev);
+        setFormData(prev);
+        localStorage.setItem('me', JSON.stringify(prev));
+      }
+      console.error('Erreur de modification :', err?.response?.data || err);
+    })
+    .finally(() => setSaving(false));
   };
 
-  if (!user) return <p className="text-center mt-10">Chargement...</p>;
+  // 4) Avatar avec anti-cache déclenché après update
+  const avatar = user?.profil
+    ? `http://127.0.0.1:8000/storage/${user.profil}${avatarVersion ? `?v=${avatarVersion}` : ''}`
+    : '';
 
   return (
     <Layout>
@@ -85,22 +126,40 @@ const MonProfilElecteur = () => {
               <h2 className="text-2xl font-bold text-blue-600">Mon Profil</h2>
               <button
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
-                onClick={() => setEditMode(true)}
+                onClick={() => { if (user) setFormData(user); setEditMode(true); }}
               >
                 <Pencil size={18} />
                 Modifier
               </button>
             </div>
+
             <div className="flex flex-col items-center gap-3 mt-6">
-              <img
-              src={`http://127.0.0.1:8000/storage/${user.profil}`}
-              alt="avatar"
-              className="w-28 h-28 rounded-full object-cover border shadow"
-              />
-              <p className="mt-2"><strong>Nom :</strong> {user.nom}</p>
-              <p><strong>Prénom :</strong> {user.prenom}</p>
-              <p><strong>Email :</strong> {user.email}</p>
-              <p><strong>Rôle :</strong> {user.role}</p>
+              {avatar ? (
+                <img
+                  src={avatar}
+                  alt="avatar"
+                  className="w-28 h-28 rounded-full object-cover border shadow"
+                />
+              ) : (
+                <Skel className="w-28 h-28 rounded-full" />
+              )}
+
+              <p className="mt-2">
+                <strong>Nom :</strong>{' '}
+                {user?.nom ? user.nom : <Skel className="inline-block align-middle w-24 h-4" />}
+              </p>
+              <p>
+                <strong>Prénom :</strong>{' '}
+                {user?.prenom ? user.prenom : <Skel className="inline-block align-middle w-28 h-4" />}
+              </p>
+              <p>
+                <strong>Email :</strong>{' '}
+                {user?.email ? user.email : <Skel className="inline-block align-middle w-40 h-4" />}
+              </p>
+              <p>
+                <strong>Rôle :</strong>{' '}
+                {user?.role ? user.role : <Skel className="inline-block align-middle w-20 h-4" />}
+              </p>
             </div>
           </div>
         ) : (
@@ -115,6 +174,7 @@ const MonProfilElecteur = () => {
                   value={formData.nom}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded px-3 py-2"
+                  required
                 />
               </div>
               <div>
@@ -125,6 +185,7 @@ const MonProfilElecteur = () => {
                   value={formData.prenom}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded px-3 py-2"
+                  required
                 />
               </div>
               <div>
@@ -135,6 +196,7 @@ const MonProfilElecteur = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className="w-full border border-gray-300 rounded px-3 py-2"
+                  required
                 />
               </div>
               <div>
@@ -154,14 +216,16 @@ const MonProfilElecteur = () => {
                 type="button"
                 onClick={() => setEditMode(false)}
                 className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                disabled={saving}
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+                disabled={saving}
               >
-                Enregistrer
+                {saving ? 'Enregistrement…' : 'Enregistrer'}
               </button>
             </div>
           </form>

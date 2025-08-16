@@ -90,7 +90,7 @@ const MaCandidature = () => {
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"
                     >
-                      Télécharger le programme
+                     Téléverser le programme
                     </a>
                   </div>
 
@@ -102,7 +102,7 @@ const MaCandidature = () => {
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"
                     >
-                      Télécharger la lettre
+                      Téléverser la lettre
                     </a>
                   </div>
                 </div>
