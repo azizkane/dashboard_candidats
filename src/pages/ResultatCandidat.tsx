@@ -373,7 +373,10 @@ const ResultatsParElection: React.FC = () => {
         </main>
       </div>
 
-      <FooterCandidat />
+      <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
+          <FooterCandidat />
+      </div>
+      
 
       {/* ========= STYLES ========= */}
       <style>{`

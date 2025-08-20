@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { useLocation, useParams } from 'react-router-dom';
 import Appbar from '../components/AppbarElecteur';
 import SidebarElecteur from '../components/SidebarElecteur';
 import FooterElecteur from '../components/FooterElecteur';
@@ -20,13 +21,11 @@ type Candidat = {
   prenom: string;
   email: string;
   profil?: string | null;
-  // rempli côté front par polling “unitaire”
   votes_count?: number;
 };
 
 const ResultatsParElection: React.FC = () => {
   /* ========= STATE ========= */
-  const [elections, setElections] = useState<Election[]>([]);
   const [candidats, setCandidats] = useState<Candidat[]>([]);
   const [selectedElection, setSelectedElection] = useState<Election | null>(null);
 
@@ -38,12 +37,24 @@ const ResultatsParElection: React.FC = () => {
   const defaultAvatar = '/user.png';
   const defaultImage = '/default-election.jpg';
 
-  const REFRESH_MS = 10000;
+  // Rafraîchissement à 1 minute
+  const REFRESH_MS = 60000;
   const liveTimerRef = useRef<number | null>(null);
 
-  /* ========= HELPERS ========= */
+  /* ========= RESOLUTION DE L'ID ELECTION SANS FETCH LISTE ========= */
+  const location = useLocation();
+  const params = useParams<{ electionId?: string }>();
+  const queryId = useMemo(() => new URLSearchParams(location.search).get('election'), [location.search]);
+  const storedId = useMemo(() => localStorage.getItem('selected_election_id'), []);
+  const fallbackId = (import.meta as any).env?.VITE_DEFAULT_ELECTION_ID ?? '1';
 
-  // Base d’URL : même host que le front, port 8000 (comme dans ton code)
+  const resolvedElectionId = useMemo(() => {
+    const raw = params.electionId ?? queryId ?? storedId ?? String(fallbackId);
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  }, [params.electionId, queryId, storedId, fallbackId]);
+
+  /* ========= HELPERS ========= */
   const API_BASE = useMemo(() => {
     const proto = window?.location?.protocol || 'http:';
     const host = window?.location?.hostname || '127.0.0.1';
@@ -57,9 +68,6 @@ const ResultatsParElection: React.FC = () => {
     );
   };
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit' });
-
   const storageUrl = (p?: string | null) => {
     if (!p) return null;
     if (/^https?:\/\//i.test(p)) return p;
@@ -72,10 +80,11 @@ const ResultatsParElection: React.FC = () => {
   const getCandidatImage = (profil?: string | null) => storageUrl(profil) || defaultAvatar;
 
   const statusLabel = useMemo(() => {
-    if (!selectedElection) return '';
+    if (!selectedElection?.date_debut || !selectedElection?.date_fin) return '';
     const now = new Date();
     const d1 = new Date(selectedElection.date_debut);
     const d2 = new Date(selectedElection.date_fin);
+    if (isNaN(+d1) || isNaN(+d2)) return '';
     if (now < d1) return 'À venir';
     if (now > d2) return 'Terminé';
     return 'En cours';
@@ -106,26 +115,13 @@ const ResultatsParElection: React.FC = () => {
     return Math.round(((Number(votes || 0) * 100) / total) * 100) / 100; // 2 décimales
   };
 
-  /* ========= API CALLS ========= */
-
-  const fetchElections = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/api/liste_elections`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setElections(res.data?.data || res.data || []);
-    } catch (err) {
-      console.error('Erreur chargement élections', err);
-    }
-  }, [API_BASE, token]);
-
+  /* ========= API CALLS (pas de fetch de LISTE d'élections) ========= */
   const fetchCandidats = useCallback(async () => {
     if (!selectedElection) return;
     try {
       const res = await axios.get(`${API_BASE}/api/candidats_par_election/${selectedElection.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // logique: on conserve l’ordre, votes_count seront remplis après
       const list: Candidat[] = res.data?.data || [];
       setCandidats(list);
       setUpdatedNow();
@@ -134,7 +130,7 @@ const ResultatsParElection: React.FC = () => {
     }
   }, [API_BASE, selectedElection, token]);
 
-  // Route unitaire : /api/votes/{election_id}/{candidat_id}
+  // /api/votes/{election_id}/{candidat_id}
   const getVotesForCandidate = useCallback(
     async (electionId: number, candidatId: number) => {
       try {
@@ -142,13 +138,7 @@ const ResultatsParElection: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` },
           params: { _t: Date.now() }
         });
-        return Number(
-          data?.votes ??
-          data?.total ??
-          data?.count ??
-          data?.data?.votes ??
-          0
-        );
+        return Number(data?.votes ?? data?.total ?? data?.count ?? data?.data?.votes ?? 0);
       } catch (e) {
         console.error('Erreur getVotesForCandidate:', e);
         return 0;
@@ -160,12 +150,10 @@ const ResultatsParElection: React.FC = () => {
   const fetchVotesCounts = useCallback(async () => {
     if (!selectedElection) return;
     if (!candidats.length) { setUpdatedNow(); return; }
-
     try {
       const counts = await Promise.all(
         candidats.map(c => getVotesForCandidate(selectedElection.id, c.id))
       );
-      // fusion non destructive
       setCandidats(prev =>
         prev.map((c, idx) => ({ ...c, votes_count: counts[idx] ?? Number(c.votes_count || 0) }))
       );
@@ -181,7 +169,6 @@ const ResultatsParElection: React.FC = () => {
   }, [fetchCandidats, fetchVotesCounts]);
 
   /* ========= LIVE POLLING ========= */
-
   const stopLive = useCallback(() => {
     if (liveTimerRef.current) {
       window.clearInterval(liveTimerRef.current);
@@ -195,7 +182,6 @@ const ResultatsParElection: React.FC = () => {
     liveTimerRef.current = window.setInterval(fetchVotesCounts, REFRESH_MS);
   }, [stopLive, fetchNow, fetchVotesCounts]);
 
-  // gère l’ouverture/fermeture du modal + toggle Live
   useEffect(() => {
     if (!showResults) {
       stopLive();
@@ -203,28 +189,29 @@ const ResultatsParElection: React.FC = () => {
     }
     if (live) startLive();
     else stopLive();
-    // cleanup si on quitte la page
     return () => stopLive();
   }, [showResults, live, startLive, stopLive]);
 
   /* ========= LIFECYCLE ========= */
-
-  useEffect(() => { fetchElections(); }, [fetchElections]);
+  // Initialise directement l'élection sélectionnée sans charger la liste
+  useEffect(() => {
+    if (!resolvedElectionId) return;
+    setSelectedElection({
+      id: resolvedElectionId,
+      titre: `Élection #${resolvedElectionId}`, // titre par défaut si on ne charge pas les métadonnées
+      description: '',
+      date_debut: '', // si tu veux le statut, tu pourras renseigner ces dates depuis un autre endroit
+      date_fin: '',
+      image: null,
+      image_url: null
+    });
+    setShowResults(true);
+  }, [resolvedElectionId]);
 
   /* ========= UI ACTIONS ========= */
-
-  const openResults = async (election: Election) => {
-    setSelectedElection(election);
-    setShowResults(true);
-    await fetchNow(); // premier chargement
-  };
-
-  const closeResults = () => {
-    setShowResults(false);
-  };
+  const closeResults = () => { setShowResults(false); };
 
   /* ========= RENDER ========= */
-
   return (
     <div className="page">
       <Appbar title="Résultats par Élection" />
@@ -233,86 +220,52 @@ const ResultatsParElection: React.FC = () => {
         <main className="main">
           <h2 className="title">Résultats par Élection</h2>
 
-          {/* Cartes d'élections */}
-          <div className="cards">
-            {elections.map((e) => (
-              <div
-                key={e.id}
-                className="election-card"
-                onClick={() => openResults(e)}
-                role="button"
-                tabIndex={0}
-              >
-                <img className="election-img" src={getElectionImage(e)} alt="Election" />
-                <div className="election-info">
-                  <h3>{e.titre}</h3>
-                  <p className="desc line-clamp">{e.description}</p>
-                  <p><strong>Début :</strong> {formatDate(e.date_debut)}</p>
-                  <p><strong>Fin :</strong> {formatDate(e.date_fin)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* MODAL Résultats */}
-          {showResults && (
-            <div
-              className="modal-overlay"
-              role="dialog"
-              aria-modal="true"
-              onClick={(e) => {
-                // Clique en dehors = ne ferme pas par défaut (comme un vrai dialog),
-                // si tu veux fermer sur clic overlay : dé-commente ci-dessous
-                // if (e.currentTarget === e.target) closeResults();
-              }}
-            >
+          {showResults && selectedElection && (
+            <div className="modal-overlay" role="dialog" aria-modal="true">
               <div className="results-dialog" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="dialog-header">
                   <h3 className="dialog-title">
-                    {selectedElection ? `Résultats — ${selectedElection.titre}` : 'Résultats'}
+                    {`Résultats — ${selectedElection.titre}`}
                   </h3>
-
                   <button className="close-btn" onClick={closeResults} aria-label="Fermer">×</button>
                 </div>
 
                 {/* Meta + contrôles */}
-                {selectedElection && (
-                  <div className="results-header">
-                    <div className="meta">
-                      <span className={`tag ${statusSeverity || ''}`}>{statusLabel}</span>
-                      <span className="sep">•</span>
-                      <span className="meta-item">
-                        <i className="pi pi-users" style={{ marginRight: 4 }} />
-                        {candidats.length} candidats
-                      </span>
-                      <span className="sep">•</span>
-                      <span className="meta-item">
-                        <i className="pi pi-check-circle" style={{ marginRight: 4 }} />
-                        {totalVotes} votes
-                      </span>
-                      {lastUpdated && <span className="updated">(MAJ: {lastUpdated})</span>}
-                    </div>
-
-                    <div className="controls">
-                      <div className="live-toggle">
-                        <label className="switch">
-                          <input
-                            type="checkbox"
-                            checked={live}
-                            onChange={(e) => setLive(e.target.checked)}
-                          />
-                          <span className="slider" />
-                        </label>
-                        <span className={`live-label ${live ? 'on' : ''}`}>Live</span>
-                      </div>
-                      <button className="btn btn-light" onClick={fetchNow}>
-                        <i className="pi pi-refresh" style={{ marginRight: 6 }} />
-                        Rafraîchir
-                      </button>
-                    </div>
+                <div className="results-header">
+                  <div className="meta">
+                    {statusLabel && <span className={`tag ${statusSeverity || ''}`}>{statusLabel}</span>}
+                    <span className="sep">•</span>
+                    <span className="meta-item">
+                      <i className="pi pi-users" style={{ marginRight: 4 }} />
+                      {candidats.length} candidats
+                    </span>
+                    <span className="sep">•</span>
+                    <span className="meta-item">
+                      <i className="pi pi-check-circle" style={{ marginRight: 4 }} />
+                      {totalVotes} votes
+                    </span>
+                    {lastUpdated && <span className="updated">(MAJ: {lastUpdated})</span>}
                   </div>
-                )}
+
+                  <div className="controls">
+                    <div className="live-toggle">
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={live}
+                          onChange={(e) => setLive(e.target.checked)}
+                        />
+                        <span className="slider" />
+                      </label>
+                      <span className={`live-label ${live ? 'on' : ''}`}>Live</span>
+                    </div>
+                    <button className="btn btn-light" onClick={fetchNow}>
+                      <i className="pi pi-refresh" style={{ marginRight: 6 }} />
+                      Rafraîchir
+                    </button>
+                  </div>
+                </div>
 
                 {/* Leader */}
                 {leader && (
@@ -373,36 +326,18 @@ const ResultatsParElection: React.FC = () => {
         </main>
       </div>
 
-      <FooterElecteur />
+      {/* Footer fixé en bas */}
+      <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
+        <FooterElecteur />
+      </div>
 
       {/* ========= STYLES ========= */}
       <style>{`
         .page { display: flex; flex-direction: column; min-height: 100vh; background: #f5f7fb; }
         .layout { display: flex; flex: 1; }
-        .main { flex: 1; padding: 1.2rem; margin-left: 250px; } /* garde la place du SidebarElecteur */
+        .main { flex: 1; padding: 1.2rem; margin-left: 250px; }
         .title { font-size: 1.6rem; color: #1e3a8a; margin: 1rem 0; }
 
-        .cards {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          gap: .75rem;
-        }
-        .election-card {
-          border: 1px solid #dbeafe;
-          border-radius: 8px;
-          padding: .6rem;
-          background: #fff;
-          cursor: pointer;
-          transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-          box-shadow: 0 3px 10px rgba(37, 99, 235, 0.08);
-        }
-        .election-card:hover { transform: translateY(-2px); border-color: #2563eb; }
-        .election-img { width: 100%; height: 110px; object-fit: cover; border-radius: 7px; margin-bottom: .4rem; }
-        .election-info h3 { margin: 0 0 .15rem 0; color: #0f172a; font-size: .95rem; }
-        .desc { color: #475569; margin: .15rem 0 .3rem 0; font-size: .88rem; }
-        .election-info p { font-size: .85rem; margin: .12rem 0; }
-
-        /* Modal overlay + dialog */
         .modal-overlay {
           position: fixed; inset: 0;
           background: rgba(17, 24, 39, 0.45);
@@ -479,10 +414,7 @@ const ResultatsParElection: React.FC = () => {
         .leader-avatar { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; }
         .leader-info { display: flex; flex-direction: column; gap: .35rem; }
         .leader-top { display: flex; align-items: center; gap: .5rem; }
-        .badge {
-          background: #22c55e; color: #fff; border-radius: 9999px; padding: .15rem .6rem;
-          font-size: .8rem; font-weight: 800;
-        }
+        .badge { background: #22c55e; color: #fff; border-radius: 9999px; padding: .15rem .6rem; font-size: .8rem; font-weight: 800; }
         .leader-stats { display: flex; align-items: center; gap: .6rem; font-weight: 800; color: #0f172a; }
         .leader-stats .pct { color: #16a34a; }
         .bar { width: 100%; height: 12px; background: #e2e8f0; border-radius: 9999px; overflow: hidden; }
@@ -495,10 +427,7 @@ const ResultatsParElection: React.FC = () => {
         }
         .rank-row.first { border-color: #bfdbfe; background: #f8fbff; }
         .left { display: flex; align-items: center; gap: .6rem; min-width: 0; }
-        .pos {
-          display: inline-flex; align-items: center; justify-content: center;
-          width: 28px; height: 28px; border-radius: 9999px; background: #2563eb; color: #fff; font-weight: 800;
-        }
+        .pos { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #2563eb; color: #fff; font-weight: 800; }
         .avatar { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
         .id { min-width: 0; }
         .name { font-weight: 800; color: #0f172a; }

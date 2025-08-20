@@ -154,7 +154,7 @@ const CandidatsParElection = () => {
           </div>
         </div>
       </div>
-      <div style={{ paddingTop: '160px' }}>
+      <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
         <FooterElecteur />
       </div>
 

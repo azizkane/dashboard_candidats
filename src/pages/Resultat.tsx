@@ -54,7 +54,7 @@ const ResultatsElecteur: React.FC = () => {
             {errMsg && <div className="text-center text-red-600 font-medium mb-4">{errMsg}</div>}
 
             {loadingElections ? (
-              <div className="text-center text-gray-600">Chargement des élections…</div>
+              <div className="text-center text-gray-600"></div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
                 {elections.map((election) => (
@@ -75,7 +75,7 @@ const ResultatsElecteur: React.FC = () => {
                         Début : {election.date_debut} | Fin : {election.date_fin}
                       </p>
                       <p className="mt-2 text-sm text-blue-600 font-medium">
-                        Cliquer pour voir les candidats
+                        Cliquer pour voir les résultats
                       </p>
                     </div>
                   </div>

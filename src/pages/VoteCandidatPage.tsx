@@ -194,8 +194,10 @@ const VoteCandidat: React.FC = () => {
             </div>
           )}
         </div>
-
-        <FooterCandidat />
+        <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
+          <FooterCandidat />
+        </div>
+        
       </div>
     </div>
   );

@@ -56,7 +56,10 @@ const Elections = () => {
           </div>
         </div>
       </div>
-      <FooterElecteur />
+      <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
+            <FooterElecteur />
+      </div>
+      
 
       <style>
         {`
