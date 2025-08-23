@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 import { Pencil } from 'lucide-react';
 import SidebarCandidat from '@/components/SidebarCandidat';
 import AppBar from '@/components/AppbarCandidat';
 import FooterCandidat from '@/components/FooterCandidat';
+import {
+  fetchUserProfile,
+  updateUserProfile,
+  getProfileAvatarUrl
+} from '../api';
 
 interface UserData {
   id: number;
@@ -49,21 +53,18 @@ const MonProfilCandidat = () => {
 
   // 2) Rafraîchissement silencieux depuis l’API (sans écran “Chargement...”)
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return;
-
-    axios.get('http://127.0.0.1:8000/api/user', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    .then((res) => {
-      const fresh = res.data as UserData;
-      setUser(fresh);
-      setFormData(fresh);
-      localStorage.setItem('me_candidat', JSON.stringify(fresh));
-    })
-    .catch(() => {
-      // On garde le cache si l’appel échoue
-    });
+    const getProfile = async () => {
+      try {
+        const fresh = await fetchUserProfile();
+        setUser(fresh);
+        setFormData(fresh);
+        localStorage.setItem('me_candidat', JSON.stringify(fresh));
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        // On garde le cache si l’appel échoue
+      }
+    };
+    getProfile();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,10 +72,9 @@ const MonProfilCandidat = () => {
   };
 
   // 3) Sauvegarde avec UI optimiste
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem('auth_token');
-    if (!token || !formData.id) return;
+    if (!formData.id) return;
 
     setSaving(true);
     const prev = user;
@@ -83,15 +83,8 @@ const MonProfilCandidat = () => {
     setUser(formData);
     localStorage.setItem('me_candidat', JSON.stringify(formData));
 
-    axios.put(`http://127.0.0.1:8000/api/users/${formData.id}`, formData, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
-    .then((res) => {
-      // Gère {user: {...}} ou {data: {...}} ou {...}
-      const updated =
-        (res.data && (res.data.user || res.data.data)) ? (res.data.user || res.data.data) :
-        (typeof res.data === 'object' ? res.data : formData);
-
+    try {
+      const updated = await updateUserProfile(formData.id, formData);
       setUser(updated);
       setFormData(updated);
       localStorage.setItem('me_candidat', JSON.stringify(updated));
@@ -99,22 +92,22 @@ const MonProfilCandidat = () => {
 
       // Si la photo change, buster le cache une seule fois
       setAvatarVersion(Date.now());
-    })
-    .catch((err) => {
+    } catch (err: any) {
       // rollback si échec
       if (prev) {
         setUser(prev);
         setFormData(prev);
         localStorage.setItem('me_candidat', JSON.stringify(prev));
       }
-      console.error('Erreur de modification :', err?.response?.data || err);
-    })
-    .finally(() => setSaving(false));
+      console.error('Erreur de modification :', err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // 4) Avatar avec anti-cache déclenché après update
   const avatar = user?.profil
-    ? `http://127.0.0.1:8000/storage/${user.profil}${avatarVersion ? `?v=${avatarVersion}` : ''}`
+    ? getProfileAvatarUrl(user.profil, avatarVersion)
     : '';
 
   return (

@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import SidebarElecteur from '@/components/SidebarElecteur';
 import AppBar from '@/components/AppbarElecteur';
 import FooterElecteur from '@/components/FooterElecteur';
+import {
+  fetchElectionsList,
+  getElectionImageUrl
+} from '../api'; // Assuming getElectionImageUrl is also in api.ts
 
 interface Election {
   id: number;
@@ -14,30 +17,26 @@ interface Election {
   date_fin?: string;
 }
 
-const API_BASE = 'http://localhost:8000';
-
 const ResultatsElecteur: React.FC = () => {
   const [elections, setElections] = useState<Election[]>([]);
   const [loadingElections, setLoadingElections] = useState<boolean>(false);
   const [errMsg, setErrMsg] = useState<string>('');
   const navigate = useNavigate();
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-  const headers = { Authorization: `Bearer ${token}` };
-
   useEffect(() => {
-    (async () => {
+    const getElections = async () => {
       try {
         setLoadingElections(true);
-        const res = await axios.get(`${API_BASE}/api/liste_elections`, { headers });
-        const data: Election[] = res.data?.data || [];
+        const data: Election[] = await fetchElectionsList();
         setElections(data);
-      } catch {
+      } catch (error) {
+        console.error("Erreur lors du chargement des élections:", error);
         setErrMsg("Erreur lors du chargement des élections.");
       } finally {
         setLoadingElections(false);
       }
-    })();
+    };
+    getElections();
   }, []);
 
   return (
@@ -54,7 +53,7 @@ const ResultatsElecteur: React.FC = () => {
             {errMsg && <div className="text-center text-red-600 font-medium mb-4">{errMsg}</div>}
 
             {loadingElections ? (
-              <div className="text-center text-gray-600"></div>
+              <div className="text-center text-gray-600">Chargement des élections...</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
                 {elections.map((election) => (
@@ -64,7 +63,7 @@ const ResultatsElecteur: React.FC = () => {
                     className="cursor-pointer border-2 rounded-xl overflow-hidden shadow-sm transition transform hover:scale-105 border-gray-200"
                   >
                     <img
-                      src={`${API_BASE}/storage/${(election as any).image}`}
+                      src={getElectionImageUrl(election.image || '')}
                       alt={election.titre}
                       className="w-full h-32 object-cover"
                     />

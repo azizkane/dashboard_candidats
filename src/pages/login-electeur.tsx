@@ -12,10 +12,18 @@ const LoginElecteur = () => {
     setErrorMessage('');
     setLoading(true);
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/login-electeur', {
-        email,
-        password,
-      });
+      const response = await axios.post(
+        'https://02d6a7afd014.ngrok-free.app/api/login-electeur',
+        {
+          email,
+          password,
+        },
+        {
+          headers: {
+            'ngrok-skip-browser-warning': 'true',
+          },
+        }
+      );
       localStorage.setItem('auth_token', response.data.token);
       navigate('/dashbord-electeur');
     } catch {

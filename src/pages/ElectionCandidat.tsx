@@ -1,28 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import Appbar from '../components/AppbarCandidat';
 import SidebarCandidat from '../components/SidebarCandidat';
 import FooterCandidat from '../components/FooterCandidat';
+import {
+  fetchElectionsListForCandidate,
+  getElectionImageUrl
+} from '../api';
 
 const ElectionsCandidat = () => {
   const [elections, setElections] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchElections = async () => {
-      const token = localStorage.getItem('auth_token');
+    const getElections = async () => {
       try {
-        const res = await axios.get('http://localhost:8000/api/liste_elections', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setElections(res.data.data || []);
+        const data = await fetchElectionsListForCandidate();
+        setElections(data);
       } catch (err) {
         console.error('Erreur lors du chargement des élections', err);
       }
     };
 
-    fetchElections();
+    getElections();
   }, []);
 
   const handleParticiper = (id: string) => {
@@ -40,7 +40,7 @@ const ElectionsCandidat = () => {
             {elections.map((election: any) => (
               <div className="election-card" key={election.id}>
                 <img
-                  src={`http://localhost:8000/storage/${election.image}`}
+                  src={getElectionImageUrl(election.image)}
                   alt={election.titre}
                   className="w-full h-32 object-cover rounded-t-lg"
                 />

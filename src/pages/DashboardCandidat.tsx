@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import SidebarCandidat from '@/components/SidebarCandidat';
 import AppBar from '@/components/AppbarCandidat';
 import FooterCandidat from '@/components/FooterCandidat';
-import axios from 'axios';
 import {
   Vote,
   Users,
@@ -11,6 +10,7 @@ import {
   FileText,
   CircleArrowRight
 } from 'lucide-react';
+import { fetchCandidateProfile } from '../api';
 
 interface CardProps {
   title: string;
@@ -37,15 +37,16 @@ const DashboardCandidat = () => {
   const [nom, setNom] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      axios
-        .get('http://127.0.0.1:8000/api/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((res) => setNom(`${res.data?.prenom ?? ''} ${res.data?.nom ?? ''}`.trim()))
-        .catch(() => setNom(''));
-    }
+    const getProfile = async () => {
+      try {
+        const res = await fetchCandidateProfile();
+        setNom(`${res?.prenom ?? ''} ${res?.nom ?? ''}`.trim());
+      } catch (error) {
+        setNom('');
+        console.error("Error fetching candidate profile:", error);
+      }
+    };
+    getProfile();
   }, []);
 
   return (

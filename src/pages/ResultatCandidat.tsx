@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
 import Appbar from '../components/AppbarElecteur';
 import SidebarCandidat from '../components/SidebarCandidat';
 import FooterCandidat from '../components/FooterCandidat';
+import {
+  fetchElectionsList,
+  fetchCandidatesByElection,
+  fetchVotesForCandidate,
+  getResultElectionImage,
+  getResultCandidateImage,
+  getStorageUrl
+} from '../api';
 
 type Election = {
   id: number;
@@ -20,7 +27,6 @@ type Candidat = {
   prenom: string;
   email: string;
   profil?: string | null;
-  // rempli côté front par polling “unitaire”
   votes_count?: number;
 };
 
@@ -34,21 +40,10 @@ const ResultatsParElection: React.FC = () => {
   const [live, setLive] = useState(true);
   const [lastUpdated, setLastUpdated] = useState('');
 
-  const token = useMemo(() => localStorage.getItem('auth_token') || '', []);
-  const defaultAvatar = '/user.png';
-  const defaultImage = '/default-election.jpg';
-
   const REFRESH_MS = 10000;
   const liveTimerRef = useRef<number | null>(null);
 
   /* ========= HELPERS ========= */
-
-  // Base d’URL : même host que le front, port 8000 (comme dans ton code)
-  const API_BASE = useMemo(() => {
-    const proto = window?.location?.protocol || 'http:';
-    const host = window?.location?.hostname || '127.0.0.1';
-    return `${proto}//${host}:8000`;
-  }, []);
 
   const setUpdatedNow = () => {
     const d = new Date();
@@ -59,17 +54,6 @@ const ResultatsParElection: React.FC = () => {
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit' });
-
-  const storageUrl = (p?: string | null) => {
-    if (!p) return null;
-    if (/^https?:\/\//i.test(p)) return p;
-    const clean = String(p).replace(/^\/+/, '');
-    const withStorage = clean.startsWith('storage/') ? clean : `storage/${clean}`;
-    return `${API_BASE}/${withStorage}`;
-  };
-
-  const getElectionImage = (e: Election) => e?.image_url || storageUrl(e?.image) || defaultImage;
-  const getCandidatImage = (profil?: string | null) => storageUrl(profil) || defaultAvatar;
 
   const statusLabel = useMemo(() => {
     if (!selectedElection) return '';
@@ -108,54 +92,25 @@ const ResultatsParElection: React.FC = () => {
 
   /* ========= API CALLS ========= */
 
-  const fetchElections = useCallback(async () => {
+  const fetchAllElections = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/api/liste_elections`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setElections(res.data?.data || res.data || []);
+      const data = await fetchElectionsList();
+      setElections(data);
     } catch (err) {
       console.error('Erreur chargement élections', err);
     }
-  }, [API_BASE, token]);
+  }, []);
 
-  const fetchCandidats = useCallback(async () => {
+  const fetchCandidatsForElection = useCallback(async () => {
     if (!selectedElection) return;
     try {
-      const res = await axios.get(`${API_BASE}/api/candidats_par_election/${selectedElection.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // logique: on conserve l’ordre, votes_count seront remplis après
-      const list: Candidat[] = res.data?.data || [];
+      const list: Candidat[] = await fetchCandidatesByElection(String(selectedElection.id));
       setCandidats(list);
       setUpdatedNow();
     } catch (err) {
       console.error('Erreur chargement candidats', err);
     }
-  }, [API_BASE, selectedElection, token]);
-
-  // Route unitaire : /api/votes/{election_id}/{candidat_id}
-  const getVotesForCandidate = useCallback(
-    async (electionId: number, candidatId: number) => {
-      try {
-        const { data } = await axios.get(`${API_BASE}/api/votes/${electionId}/${candidatId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { _t: Date.now() }
-        });
-        return Number(
-          data?.votes ??
-          data?.total ??
-          data?.count ??
-          data?.data?.votes ??
-          0
-        );
-      } catch (e) {
-        console.error('Erreur getVotesForCandidate:', e);
-        return 0;
-      }
-    },
-    [API_BASE, token]
-  );
+  }, [selectedElection]);
 
   const fetchVotesCounts = useCallback(async () => {
     if (!selectedElection) return;
@@ -163,9 +118,8 @@ const ResultatsParElection: React.FC = () => {
 
     try {
       const counts = await Promise.all(
-        candidats.map(c => getVotesForCandidate(selectedElection.id, c.id))
+        candidats.map(c => fetchVotesForCandidate(selectedElection.id, c.id))
       );
-      // fusion non destructive
       setCandidats(prev =>
         prev.map((c, idx) => ({ ...c, votes_count: counts[idx] ?? Number(c.votes_count || 0) }))
       );
@@ -173,12 +127,12 @@ const ResultatsParElection: React.FC = () => {
     } catch (err) {
       console.error('Erreur chargement votes par candidat (unitaire)', err);
     }
-  }, [selectedElection, candidats, getVotesForCandidate]);
+  }, [selectedElection, candidats]);
 
   const fetchNow = useCallback(async () => {
-    await fetchCandidats();
+    await fetchCandidatsForElection();
     await fetchVotesCounts();
-  }, [fetchCandidats, fetchVotesCounts]);
+  }, [fetchCandidatsForElection, fetchVotesCounts]);
 
   /* ========= LIVE POLLING ========= */
 
@@ -195,7 +149,6 @@ const ResultatsParElection: React.FC = () => {
     liveTimerRef.current = window.setInterval(fetchVotesCounts, REFRESH_MS);
   }, [stopLive, fetchNow, fetchVotesCounts]);
 
-  // gère l’ouverture/fermeture du modal + toggle Live
   useEffect(() => {
     if (!showResults) {
       stopLive();
@@ -203,13 +156,12 @@ const ResultatsParElection: React.FC = () => {
     }
     if (live) startLive();
     else stopLive();
-    // cleanup si on quitte la page
     return () => stopLive();
   }, [showResults, live, startLive, stopLive]);
 
   /* ========= LIFECYCLE ========= */
 
-  useEffect(() => { fetchElections(); }, [fetchElections]);
+  useEffect(() => { fetchAllElections(); }, [fetchAllElections]);
 
   /* ========= UI ACTIONS ========= */
 
@@ -243,7 +195,7 @@ const ResultatsParElection: React.FC = () => {
                 role="button"
                 tabIndex={0}
               >
-                <img className="election-img" src={getElectionImage(e)} alt="Election" />
+                <img className="election-img" src={getResultElectionImage(e.image)} alt="Election" />
                 <div className="election-info">
                   <h3>{e.titre}</h3>
                   <p className="desc line-clamp">{e.description}</p>
@@ -261,8 +213,6 @@ const ResultatsParElection: React.FC = () => {
               role="dialog"
               aria-modal="true"
               onClick={(e) => {
-                // Clique en dehors = ne ferme pas par défaut (comme un vrai dialog),
-                // si tu veux fermer sur clic overlay : dé-commente ci-dessous
                 // if (e.currentTarget === e.target) closeResults();
               }}
             >
@@ -317,7 +267,7 @@ const ResultatsParElection: React.FC = () => {
                 {/* Leader */}
                 {leader && (
                   <div className="leader-card">
-                    <img src={getCandidatImage(leader.profil)} className="leader-avatar" alt="leader" />
+                    <img src={getResultCandidateImage(leader.profil)} className="leader-avatar" alt="leader" />
                     <div className="leader-info">
                       <div className="leader-top">
                         <span className="badge">En tête</span>
@@ -342,7 +292,7 @@ const ResultatsParElection: React.FC = () => {
                     <div key={c.id} className={`rank-row ${idx === 0 ? 'first' : ''}`}>
                       <div className="left">
                         <span className="pos">#{idx + 1}</span>
-                        <img src={getCandidatImage(c.profil)} className="avatar" alt="" />
+                        <img src={getResultCandidateImage(c.profil)} className="avatar" alt="" />
                         <div className="id">
                           <div className="name">{c.prenom} {c.nom}</div>
                           <div className="email">{c.email}</div>

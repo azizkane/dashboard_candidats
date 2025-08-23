@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import Appbar from '../components/AppbarElecteur';
 import SidebarElecteur from '../components/SidebarElecteur';
 import FooterElecteur from '../components/FooterElecteur';
+import {
+  fetchCandidatesByElection,
+  checkUserVoteStatus,
+  fetchCandidatureDetails,
+  voteForCandidate,
+  getProgramDownloadUrl,
+  getCandidatePhotoUrl
+} from '../api';
 
 const CandidatsParElection = () => {
   const { id: electionId } = useParams();
@@ -23,39 +30,27 @@ const CandidatsParElection = () => {
   }, [electionId]);
 
   const fetchCandidats = async () => {
-    const token = localStorage.getItem('auth_token');
     try {
-      const res = await axios.get(`http://localhost:8000/api/candidats_par_election/${electionId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCandidats(res.data.data || []);
+      const data = await fetchCandidatesByElection(electionId as string);
+      setCandidats(data);
     } catch (err) {
       console.error('Erreur lors du chargement des candidats', err);
     }
   };
 
   const verifierSiDejaVote = async () => {
-    const token = localStorage.getItem('auth_token');
     try {
-      const res = await axios.get(`http://localhost:8000/api/listes_votes?election_id=${electionId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const userId = JSON.parse(atob(token.split('.')[1])).sub;
-      const aVote = res.data.data.some((vote: any) => vote.user_id == userId);
-      setADejaVote(aVote);
+      const hasVoted = await checkUserVoteStatus(electionId as string);
+      setADejaVote(hasVoted);
     } catch (err) {
       console.error('Erreur lors de la vérification du vote', err);
     }
   };
 
-  const fetchCandidatureDetails = async (candidatId: number) => {
-    const token = localStorage.getItem('auth_token');
+  const fetchCandidatureDetailsData = async (candidatId: number) => {
     try {
-      const res = await axios.get(`http://localhost:8000/api/candidature/${electionId}/${candidatId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCandidatureDetails(prev => ({ ...prev, [candidatId]: res.data.data }));
+      const details = await fetchCandidatureDetails(electionId as string, candidatId);
+      setCandidatureDetails(prev => ({ ...prev, [candidatId]: details }));
     } catch (error) {
       console.error("Erreur lors du chargement de la candidature", error);
     }
@@ -65,7 +60,7 @@ const CandidatsParElection = () => {
     if (detailsVisibles === candidatId) {
       setDetailsVisibles(null);
     } else {
-      await fetchCandidatureDetails(candidatId);
+      await fetchCandidatureDetailsData(candidatId);
       setDetailsVisibles(candidatId);
     }
   };
@@ -82,25 +77,18 @@ const CandidatsParElection = () => {
 
     if (confirm.isConfirmed) {
       try {
-        const token = localStorage.getItem('auth_token');
-        await axios.post('http://localhost:8000/api/voter', {
-          candidat_id: candidatId,
-          election_id: electionId,
-        }, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
+        await voteForCandidate(candidatId, electionId as string);
         Swal.fire('Vote enregistré !', '', 'success');
         setADejaVote(true);
       } catch (error: any) {
-        const message = error.response?.data?.message || 'Impossible de voter.';
+        const message = error.message || 'Impossible de voter.';
         Swal.fire('Erreur', message, 'error');
       }
     }
   };
 
   const handleTelechargementProgramme = (programmePath: string) => {
-    const url = `http://localhost:8000/storage/${programmePath}`;
+    const url = getProgramDownloadUrl(programmePath);
     window.open(url, '_blank');
   };
 
@@ -118,7 +106,7 @@ const CandidatsParElection = () => {
               return (
                 <div className="candidat-card" key={candidat.id}>
                   <img
-                    src={candidat.profil ? `http://localhost:8000/storage/${candidat.profil}` : '/user.png'}
+                    src={getCandidatePhotoUrl(candidat.profil)}
                     alt={candidat.nom}
                     className="candidat-image"
                   />
@@ -272,5 +260,3 @@ const CandidatsParElection = () => {
 };
 
 export default CandidatsParElection;
-
-  

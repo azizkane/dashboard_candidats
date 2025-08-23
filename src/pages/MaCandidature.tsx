@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import SidebarCandidat from '@/components/SidebarCandidat';
 import Appbar from '@/components/AppbarCandidat';
 import FooterCandidat from '@/components/FooterCandidat';
 import { useNavigate } from 'react-router-dom';
+import {
+  fetchMyCandidature,
+  deleteCandidature,
+  getDocumentDownloadUrl
+} from '../api';
 
 interface Candidature {
   id: number;
@@ -21,19 +25,16 @@ const MaCandidature = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchCandidature = async () => {
-      const token = localStorage.getItem('auth_token');
+    const getCandidature = async () => {
       try {
-        const res = await axios.get('http://localhost:8000/api/ma_candidature', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setCandidature(res.data.data);
+        const data = await fetchMyCandidature();
+        setCandidature(data);
       } catch (err) {
         console.error('Erreur lors du chargement de la candidature', err);
       }
     };
 
-    fetchCandidature();
+    getCandidature();
   }, []);
 
   const handleModifier = () => {
@@ -48,10 +49,7 @@ const MaCandidature = () => {
     if (!confirm) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
-      await axios.delete(`http://localhost:8000/api/supprimer_candidature/${candidature.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await deleteCandidature(candidature.id);
       alert('Candidature supprimée avec succès.');
       navigate('/candidat/dashboard');
     } catch (err) {
@@ -85,7 +83,7 @@ const MaCandidature = () => {
                   <div>
                     <p className="font-semibold">📄 Programme :</p>
                     <a
-                      href={`http://localhost:8000/storage/${candidature.programme}`}
+                      href={getDocumentDownloadUrl(candidature.programme)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"
@@ -97,7 +95,7 @@ const MaCandidature = () => {
                   <div>
                     <p className="font-semibold">📝 Lettre de motivation :</p>
                     <a
-                      href={`http://localhost:8000/storage/${candidature.lettre_motivation}`}
+                      href={getDocumentDownloadUrl(candidature.lettre_motivation)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"

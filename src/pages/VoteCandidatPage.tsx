@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import SidebarCandidat from '@/components/SidebarCandidat';
 import AppBar from '@/components/AppbarCandidat';
 import FooterCandidat from '@/components/FooterCandidat';
 import { ToastContainer, toast } from 'react-toastify';
 import { Dropdown } from 'primereact/dropdown';
 import 'react-toastify/dist/ReactToastify.css';
+import {
+  fetchCurrentUser,
+  fetchElections,
+  fetchCandidatesForElection,
+  voteForCandidate,
+  getProfileAvatarUrl // Assuming this can also be used for candidate profiles
+} from '../api';
 
 interface Election {
   id: number;
@@ -26,8 +32,6 @@ interface CurrentUser {
   email: string;
 }
 
-const API_BASE = 'http://localhost:8000';
-
 const VoteCandidat: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [elections, setElections] = useState<Election[]>([]);
@@ -37,19 +41,14 @@ const VoteCandidat: React.FC = () => {
   const [loadingCandidats, setLoadingCandidats] = useState<boolean>(false);
   const [votingId, setVotingId] = useState<number | null>(null);
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-  const authHeader = { Authorization: `Bearer ${token}` };
-
   useEffect(() => {
     const fetchUserAndElections = async () => {
       try {
         setLoadingElections(true);
-        const [meRes, electionsRes] = await Promise.all([
-          axios.get(`${API_BASE}/api/user`, { headers: authHeader }),
-          axios.get(`${API_BASE}/api/liste_elections`, { headers: authHeader }),
-        ]);
-        setCurrentUser(meRes.data);
-        const electionsData: Election[] = electionsRes.data?.data || electionsRes.data || [];
+        const meRes = await fetchCurrentUser();
+        setCurrentUser(meRes);
+
+        const electionsData: Election[] = await fetchElections();
         setElections(electionsData);
       } catch (e) {
         toast.error("Erreur de chargement (utilisateur/élections).");
@@ -60,25 +59,19 @@ const VoteCandidat: React.FC = () => {
     fetchUserAndElections();
   }, []);
 
-  const fetchCandidats = async (electionId: number) => {
+  const handleFetchCandidats = async (electionId: number) => {
     setSelectedElectionId(electionId);
     setCandidats([]);
     if (!electionId) return;
 
     try {
       setLoadingCandidats(true);
-      const res = await axios.get(
-        `${API_BASE}/api/candidats_par_election/${electionId}`,
-        { headers: authHeader }
-      );
-
-      const list: Candidate[] = (res.data?.data || []).map((u: any) => ({
+      const list: Candidate[] = (await fetchCandidatesForElection(String(electionId))).map((u: any) => ({
         id: u.id,
         name: u.name || `${u.nom ?? ''} ${u.prenom ?? ''}`.trim() || u.email,
         email: u.email,
         profil: u.profil ?? null,
       }));
-
       setCandidats(list);
     } catch {
       toast.error("Erreur lors du chargement des candidats.");
@@ -88,8 +81,7 @@ const VoteCandidat: React.FC = () => {
   };
 
   const getProfilUrl = (profil?: string | null) => {
-    if (!profil) return null;
-    return `${API_BASE}/storage/${profil}`;
+    return getProfileAvatarUrl(profil || '');
   };
 
   const handleVote = async (candidatId: number) => {
@@ -100,17 +92,10 @@ const VoteCandidat: React.FC = () => {
 
     setVotingId(candidatId);
     try {
-      const payload = {
-        user_id: currentUser.id,
-        election_id: selectedElectionId,
-        candidat_id: candidatId,
-        date_vote: new Date().toISOString().split('T')[0],
-      };
-
-      await axios.post(`${API_BASE}/api/voter`, payload, { headers: authHeader });
+      await voteForCandidate(candidatId, String(selectedElectionId));
       toast.success("Votre vote a été enregistré !");
     } catch (err: any) {
-      const msg = err?.response?.data?.message || "Erreur lors du vote.";
+      const msg = err.message || "Erreur lors du vote.";
       toast.error(msg);
     } finally {
       setVotingId(null);
@@ -136,7 +121,7 @@ const VoteCandidat: React.FC = () => {
               <Dropdown
                 value={selectedElectionId}
                 options={elections}
-                onChange={(e) => fetchCandidats(e.value)}
+                onChange={(e) => handleFetchCandidats(e.value)}
                 optionLabel="titre"
                 optionValue="id"
                 placeholder={loadingElections ? 'Chargement...' : 'Choisir une élection'}

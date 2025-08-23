@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Pencil } from 'lucide-react';
-import SidebarElecteur from '@/components/SidebarElecteur';
-import AppBar from '@/components/AppbarElecteur';
-import FooterElecteur from '@/components/FooterElecteur';
+import { useEffect, useState } from "react";
+import { Pencil } from "lucide-react";
+import SidebarElecteur from "@/components/SidebarElecteur";
+import AppBar from "@/components/AppbarElecteur";
+import FooterElecteur from "@/components/FooterElecteur";
+import {
+  fetchElectorProfile,
+  updateElectorProfile,
+  getProfileAvatarUrl,
+} from "../api";
 
 interface UserData {
   id: number;
@@ -28,15 +32,18 @@ const Layout = ({ children }: { children: React.ReactNode }) => (
 );
 
 // Skeleton simple (optionnel)
-const Skel = ({ className = '' }: { className?: string }) => (
+const Skel = ({ className = "" }: { className?: string }) => (
   <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
 );
 
 const MonProfilElecteur = () => {
   // 1) Rendu instantané depuis le cache
   const cached = (() => {
-    try { return JSON.parse(localStorage.getItem('me') || 'null') as UserData | null; }
-    catch { return null; }
+    try {
+      return JSON.parse(localStorage.getItem("me") || "null") as UserData | null;
+    } catch { 
+      return null; 
+    }
   })();
 
   const [user, setUser] = useState<UserData | null>(cached);
@@ -44,26 +51,23 @@ const MonProfilElecteur = () => {
   const [saving, setSaving] = useState(false);
   const [avatarVersion, setAvatarVersion] = useState<number>(0);
   const [formData, setFormData] = useState<UserData>(
-    cached ?? { id: 0, nom: '', prenom: '', email: '', role: '', profil: '' }
+    cached ?? { id: 0, nom: "", prenom: "", email: "", role: "", profil: "" }
   );
 
   // 2) Rafraîchissement silencieux depuis l’API (sans écran "Chargement...")
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return;
-
-    axios.get('http://127.0.0.1:8000/api/user', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    .then((res) => {
-      const fresh = res.data as UserData;
-      setUser(fresh);
-      setFormData(fresh);
-      localStorage.setItem('me', JSON.stringify(fresh));
-    })
-    .catch(() => {
-      // on garde le cache si l’appel échoue
-    });
+    const getProfile = async () => {
+      try {
+        const fresh = await fetchElectorProfile();
+        setUser(fresh);
+        setFormData(fresh);
+        localStorage.setItem("me", JSON.stringify(fresh));
+      } catch (err) {
+        console.error("Erreur lors du chargement du profil:", err);
+        // on garde le cache si l’appel échoue
+      }
+    };
+    getProfile();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,51 +75,44 @@ const MonProfilElecteur = () => {
   };
 
   // 3) Sauvegarde avec UI optimiste (affichage immédiat des modifs)
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const token = localStorage.getItem('auth_token');
-    if (!token || !formData.id) return;
+    if (!formData.id) return;
 
     setSaving(true);
     const prev = user;
 
     // UI optimiste: on affiche tout de suite les nouvelles valeurs
     setUser(formData);
-    localStorage.setItem('me', JSON.stringify(formData));
+    localStorage.setItem("me", JSON.stringify(formData));
 
-    axios.put(`http://127.0.0.1:8000/api/users/${formData.id}`, formData, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
-    .then((res) => {
-      // Gère {user: {...}} ou {data: {...}} ou {...}
-      const updated =
-        (res.data && (res.data.user || res.data.data)) ? (res.data.user || res.data.data) :
-        (typeof res.data === 'object' ? res.data : formData);
+    try {
+      const updated = await updateElectorProfile(formData.id, formData);
 
       setUser(updated);
       setFormData(updated);
-      localStorage.setItem('me', JSON.stringify(updated));
+      localStorage.setItem("me", JSON.stringify(updated));
       setEditMode(false);
 
       // Si la photo a changé, on "buste" le cache une seule fois
       setAvatarVersion(Date.now());
-    })
-    .catch((err) => {
+    } catch (err: any) {
       // rollback si échec
       if (prev) {
         setUser(prev);
         setFormData(prev);
-        localStorage.setItem('me', JSON.stringify(prev));
+        localStorage.setItem("me", JSON.stringify(prev));
       }
-      console.error('Erreur de modification :', err?.response?.data || err);
-    })
-    .finally(() => setSaving(false));
+      console.error("Erreur de modification :", err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // 4) Avatar avec anti-cache déclenché après update
   const avatar = user?.profil
-    ? `http://127.0.0.1:8000/storage/${user.profil}${avatarVersion ? `?v=${avatarVersion}` : ''}`
-    : '';
+    ? getProfileAvatarUrl(user.profil, avatarVersion)
+    : "";
 
   return (
     <Layout>
@@ -126,7 +123,10 @@ const MonProfilElecteur = () => {
               <h2 className="text-2xl font-bold text-blue-600">Mon Profil</h2>
               <button
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
-                onClick={() => { if (user) setFormData(user); setEditMode(true); }}
+                onClick={() => {
+                  if (user) setFormData(user);
+                  setEditMode(true);
+                }}
               >
                 <Pencil size={18} />
                 Modifier
@@ -145,20 +145,36 @@ const MonProfilElecteur = () => {
               )}
 
               <p className="mt-2">
-                <strong>Nom :</strong>{' '}
-                {user?.nom ? user.nom : <Skel className="inline-block align-middle w-24 h-4" />}
+                <strong>Nom :</strong>{" "}
+                {user?.nom ? (
+                  user.nom
+                ) : (
+                  <Skel className="inline-block align-middle w-24 h-4" />
+                )}
               </p>
               <p>
-                <strong>Prénom :</strong>{' '}
-                {user?.prenom ? user.prenom : <Skel className="inline-block align-middle w-28 h-4" />}
+                <strong>Prénom :</strong>{" "}
+                {user?.prenom ? (
+                  user.prenom
+                ) : (
+                  <Skel className="inline-block align-middle w-28 h-4" />
+                )}
               </p>
               <p>
-                <strong>Email :</strong>{' '}
-                {user?.email ? user.email : <Skel className="inline-block align-middle w-40 h-4" />}
+                <strong>Email :</strong>{" "}
+                {user?.email ? (
+                  user.email
+                ) : (
+                  <Skel className="inline-block align-middle w-40 h-4" />
+                )}
               </p>
               <p>
-                <strong>Rôle :</strong>{' '}
-                {user?.role ? user.role : <Skel className="inline-block align-middle w-20 h-4" />}
+                <strong>Rôle :</strong>{" "}
+                {user?.role ? (
+                  user.role
+                ) : (
+                  <Skel className="inline-block align-middle w-20 h-4" />
+                )}
               </p>
             </div>
           </div>
@@ -225,7 +241,7 @@ const MonProfilElecteur = () => {
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
                 disabled={saving}
               >
-                {saving ? 'Enregistrement…' : 'Enregistrer'}
+                {saving ? "Enregistrement…" : "Enregistrer"}
               </button>
             </div>
           </form>

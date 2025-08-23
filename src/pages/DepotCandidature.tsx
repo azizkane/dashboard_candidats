@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import Appbar from '../components/AppbarElecteur';
 import SidebarElecteur from '../components/SidebarElecteur';
 import FooterElecteur from '../components/FooterElecteur';
+import {
+  fetchUsers,
+  fetchElections,
+  submitCandidature
+} from '../api';
 
 const DepotCandidature = () => {
   const [users, setUsers] = useState([]);
@@ -16,25 +20,19 @@ const DepotCandidature = () => {
   const [dateSoumission, setDateSoumission] = useState('');
 
   const fetchData = async () => {
-    const token = localStorage.getItem('auth_token');
     try {
-      const [usersRes, electionsRes] = await Promise.all([
-        axios.get('http://localhost:8000/api/users', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get('http://localhost:8000/api/liste_elections', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [usersData, electionsData] = await Promise.all([
+        fetchUsers(),
+        fetchElections(),
       ]);
-      setUsers(usersRes.data.data || []);
-      setElections(electionsRes.data.data || []);
+      setUsers(usersData);
+      setElections(electionsData);
     } catch (error) {
       console.error('Erreur de chargement des données :', error);
     }
   };
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem('auth_token');
     const formData = new FormData();
 
     formData.append('user_id', userId);
@@ -45,12 +43,7 @@ const DepotCandidature = () => {
     formData.append('date_soumission', new Date(dateSoumission).toISOString().split('T')[0]);
 
     try {
-      await axios.post('http://localhost:8000/api/postuler', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      await submitCandidature(formData);
       alert('Candidature soumise avec succès !');
       setUserId('');
       setElectionId('');

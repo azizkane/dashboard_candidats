@@ -1,64 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { Card, CardContent } from '@/components/ui/card';
 import { DownloadIcon } from 'lucide-react';
 import SidebarCandidat from '@/components/SidebarCandidat';
 import Appbar from '@/components/AppbarCandidat';
 import FooterCandidat from '@/components/FooterCandidat';
+import {
+  fetchActivePVs,
+  getPvDownloadProps
+} from '../api';
 
 interface PV {
   id: number;
   titre: string;
   date_generation: string;
   statut: boolean | number | string;
-  contenu_pdf: string; // ex: "pvs/abc123.pdf" (stocké sur disk 'public')
+  contenu_pdf: string;
   election?: { titre?: string };
 }
-
-/** ========= Utils ========= */
-
-/**
- * Construit une URL absolue vers le fichier public (ex: /storage/pvs/abc.pdf).
- * - Si `path` est déjà absolu (http/https), on le retourne tel quel.
- * - Sinon, on préfixe avec /storage/ pour cibler le symlink Laravel (`php artisan storage:link`).
- * - BASE peut être configurée via VITE_FILES_BASE_URL (CDN, domaine API, etc.)
- */
-const FILES_BASE =
-  (import.meta as any)?.env?.VITE_FILES_BASE_URL ??
-  window.location.origin;
-
-function fileUrl(path?: string | null): string {
-  if (!path) return '#';
-  const p = String(path).trim();
-  if (/^https?:\/\//i.test(p)) return p;
-
-  const cleanBase = String(FILES_BASE).replace(/\/+$/, '');
-  const cleanPath = p.replace(/^\/+/, '');
-  const encoded = cleanPath.split('/').map(encodeURIComponent).join('/');
-
-  // Si le chemin ne commence pas déjà par "storage/", on le préfixe
-  const finalPath = encoded.startsWith('storage/')
-    ? encoded
-    : `storage/${encoded}`;
-
-  return `${cleanBase}/${finalPath}`;
-}
-
-function slugify(s: string): string {
-  return String(s)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase();
-}
-
-function getExt(path: string): string {
-  const m = path.match(/\.([a-z0-9]+)(?:\?.*)?$/i);
-  return m ? m[1].toLowerCase() : '';
-}
-
-/** ========= UI ========= */
 
 // Skeleton de carte (UI only)
 const PvSkeleton: React.FC = () => (
@@ -90,29 +48,15 @@ const PVList: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        setError('Aucun token trouvé. Veuillez vous reconnecter.');
-        setLoading(false);
-        return;
-      }
-
-      const res = await axios.get('http://127.0.0.1:8000/api/liste_pvs_actifs', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (Array.isArray(res.data?.data)) {
-        const actifs = res.data.data.filter(
-          (pv: PV) => pv.statut === true || pv.statut === 1 || pv.statut === '1'
-        );
-        setPvs(actifs);
-        localStorage.setItem('pvs_actifs', JSON.stringify(actifs));
-      } else {
-        setError('Format inattendu de la réponse API.');
-      }
-    } catch (err) {
+      const data = await fetchActivePVs();
+      const actifs = data.filter(
+        (pv: PV) => pv.statut === true || pv.statut === 1 || pv.statut === '1'
+      );
+      setPvs(actifs);
+      localStorage.setItem('pvs_actifs', JSON.stringify(actifs));
+    } catch (err: any) {
       console.error('Erreur :', err);
-      setError('Erreur lors du chargement des PVs.');
+      setError(err.message || 'Erreur lors du chargement des PVs.');
     } finally {
       setLoading(false);
     }
@@ -120,7 +64,6 @@ const PVList: React.FC = () => {
 
   useEffect(() => {
     fetchPVs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -137,19 +80,18 @@ const PVList: React.FC = () => {
 
           {error && <p className="text-red-500 text-center mb-4">{error}</p>}
 
-         
-
-          {/* sinon affichage normal */}
-          {!loading && (
+          {loading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <PvSkeleton /><PvSkeleton /><PvSkeleton />
+            </div>
+          ) : (
             <>
               {pvs.length === 0 ? (
                 <div className="text-center text-gray-500">Aucun PV actif trouvé.</div>
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {pvs.map((pv) => {
-                    const href = fileUrl(pv.contenu_pdf);
-                    const ext = getExt(pv.contenu_pdf) || 'pdf';
-                    const fname = `${slugify(pv.titre || 'pv')}.${ext}`;
+                    const { href, download } = getPvDownloadProps(pv);
 
                     return (
                       <Card key={pv.id} className="shadow-xl border border-blue-400">
@@ -167,11 +109,11 @@ const PVList: React.FC = () => {
 
                           <div className="flex justify-center items-center mt-4">
                             <a
-                              href={href} // ✅ on APPELLE la fonction utilitaire
+                              href={href}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded"
-                              download={fname} // ✅ propose un nom de fichier propre
+                              download={download}
                             >
                               <DownloadIcon size={16} /> Télécharger
                             </a>
