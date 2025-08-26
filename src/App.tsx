@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import VoterPageCandidat from "./pages/VoteCandidatPage";
 import CandidatePage from "./pages/CandidatePage"; 
@@ -31,6 +31,25 @@ import ModifierCandidature from "./pages/ModifierCandidature.tsx";
 
 const queryClient = new QueryClient();
 
+function getAuthToken(): string | null {
+  const tryKeys = ["token", "auth_token", "access_token"];
+  for (const k of tryKeys) {
+    const v = localStorage.getItem(k) || sessionStorage.getItem(k);
+    if (v) return v;
+  }
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (user?.token) return user.token;
+  } catch {}
+  return null;
+}
+
+const RequireAuth = ({ children }: { children: JSX.Element }) => {
+  const token = getAuthToken();
+  if (!token) return <Navigate to="/" replace />;
+  return children;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -44,25 +63,25 @@ const App = () => (
           <Route path="/login-electeur" element={<LoginElecteur />} />
           <Route path="/login-candidat" element={<LoginCandidat />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/dashbord-electeur" element={<DashboardElecteur />} />
-          <Route path="/electeur/profil" element={<MonProfilElecteur />} />
-          <Route path="/electeur/candidature" element={<DepotCandidature />} />
-          <Route path="/electeur/elections" element={<Election />} />
-          <Route path="/election/:id/candidats" element={<CandidatsParElection />} />
-          <Route path="/resultat/:id/candidats" element={<ResultatParElection />} />
-          <Route path="/electeur/resultats" element={<Resultat/>} />
-          <Route path="/electeur/pv" element={<PvElecteur/>} />
+          <Route path="/dashbord-electeur" element={<RequireAuth><DashboardElecteur /></RequireAuth>} />
+          <Route path="/electeur/profil" element={<RequireAuth><MonProfilElecteur /></RequireAuth>} />
+          <Route path="/electeur/candidature" element={<RequireAuth><DepotCandidature /></RequireAuth>} />
+          <Route path="/electeur/elections" element={<RequireAuth><Election /></RequireAuth>} />
+          <Route path="/election/:id/candidats" element={<RequireAuth><CandidatsParElection /></RequireAuth>} />
+          {/* Deprecated deep results route removed: use /electeur/resultats */}
+          <Route path="/electeur/resultats" element={<RequireAuth><Resultat/></RequireAuth>} />
+          <Route path="/electeur/pv" element={<RequireAuth><PvElecteur/></RequireAuth>} />
           
           {/* CANDIDAT */}
-          <Route path="/dashbord-candidat" element={<DashboardCandidat />} />
-          <Route path="/candidat/ma_candidature" element={<MaCandidature/>} />
-          <Route path="/candidat/profil" element={<MonProfilCandidat />} />
-          <Route path="/candidat/elections" element={<ElectionCandidat />} />
-          <Route path="/election/:id/candidats" element={<CandidatsParElection />} />
-          <Route path="/candidat/resultats" element={<ResultatCandidat/>} />
-          <Route path="/candidat/pv" element={<PvCandidat/>} />
-          <Route path="candidat/resultat/:id/candidats" element={<ResultatParElection />} />
-          <Route path="/candidat/modifier-candidature/:id" element={<ModifierCandidature />} />
+          <Route path="/dashbord-candidat" element={<RequireAuth><DashboardCandidat /></RequireAuth>} />
+          <Route path="/candidat/ma_candidature" element={<RequireAuth><MaCandidature/></RequireAuth>} />
+          <Route path="/candidat/profil" element={<RequireAuth><MonProfilCandidat /></RequireAuth>} />
+          <Route path="/candidat/elections" element={<RequireAuth><ElectionCandidat /></RequireAuth>} />
+          <Route path="/election/:id/candidats" element={<RequireAuth><CandidatsParElection /></RequireAuth>} />
+          <Route path="/candidat/resultats" element={<RequireAuth><ResultatCandidat/></RequireAuth>} />
+          <Route path="/candidat/pv" element={<RequireAuth><PvCandidat/></RequireAuth>} />
+          {/* Deprecated deep results route removed: use /candidat/resultats */}
+          <Route path="/candidat/modifier-candidature/:id" element={<RequireAuth><ModifierCandidature /></RequireAuth>} />
 
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

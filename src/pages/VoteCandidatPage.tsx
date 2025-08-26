@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import SidebarCandidat from '@/components/SidebarCandidat';
-import AppBar from '@/components/AppbarCandidat';
-import FooterCandidat from '@/components/FooterCandidat';
+import AppShell from '@/components/common/AppShell';
 import { ToastContainer, toast } from 'react-toastify';
 import { Dropdown } from 'primereact/dropdown';
 import 'react-toastify/dist/ReactToastify.css';
@@ -66,7 +64,8 @@ const VoteCandidat: React.FC = () => {
 
     try {
       setLoadingCandidats(true);
-      const list: Candidate[] = (await fetchCandidatesForElection(String(electionId))).map((u: any) => ({
+      const apiList = await fetchCandidatesForElection(String(electionId));
+      const list: Candidate[] = (apiList as Array<{ id: number; nom?: string; prenom?: string; name?: string; email: string; profil?: string | null }>).map((u) => ({
         id: u.id,
         name: u.name || `${u.nom ?? ''} ${u.prenom ?? ''}`.trim() || u.email,
         email: u.email,
@@ -94,8 +93,8 @@ const VoteCandidat: React.FC = () => {
     try {
       await voteForCandidate(candidatId, String(selectedElectionId));
       toast.success("Votre vote a été enregistré !");
-    } catch (err: any) {
-      const msg = err.message || "Erreur lors du vote.";
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message || "Erreur lors du vote.";
       toast.error(msg);
     } finally {
       setVotingId(null);
@@ -103,14 +102,10 @@ const VoteCandidat: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50">
       <ToastContainer />
-      <SidebarCandidat />
-
-      <div className="flex-1 flex flex-col min-h-screen bg-gray-100">
-        <AppBar title="Espace Candidat" />
-
-        <div className="flex-grow p-6 mt-16 max-w-7xl mx-auto w-full">
+      <AppShell role="candidat" title="Espace Candidat">
+        <div className="space-y-6">
           <h1 className="text-2xl md:text-3xl font-bold text-blue-700 mb-6">
             {currentUser ? `Bienvenue, ${currentUser.nom ?? 'Candidat'}` : 'Bienvenue'}
           </h1>
@@ -179,11 +174,7 @@ const VoteCandidat: React.FC = () => {
             </div>
           )}
         </div>
-        <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
-          <FooterCandidat />
-        </div>
-        
-      </div>
+      </AppShell>
     </div>
   );
 };

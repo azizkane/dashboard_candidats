@@ -14,12 +14,12 @@ import {
   CheckCircle, 
   Clock, 
   AlertTriangle,
-  Vote,
   Edit3,
   Save,
   Eye
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import AppShell from "@/components/common/AppShell";
 
 const CandidatePage = () => {
   const [candidateData, setCandidateData] = useState({
@@ -94,35 +94,13 @@ const CandidatePage = () => {
   const completionPercentage = Math.round((documents.filter(doc => doc.status === "uploaded").length / documents.length) * 100);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center space-x-4">
-              <div className="h-8 w-8 bg-gradient-to-r from-democratic to-success rounded-lg flex items-center justify-center">
-                <Vote className="h-4 w-4 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">VoteCast Hub</h1>
-                <p className="text-sm text-muted-foreground">Espace Candidat</p>
-              </div>
-            </Link>
-            <div className="flex items-center gap-3">
-              {getStatusBadge(applicationStatus)}
-              <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">
-                Candidat
-              </Badge>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
+    <AppShell role="candidat" title="Espace Candidat">
+      <div className="space-y-6">
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Colonne principale */}
           <div className="lg:col-span-2 space-y-6">
             {/* Profil du candidat */}
-            <Card>
+            <Card className="border border-blue-200 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
@@ -222,7 +200,7 @@ const CandidatePage = () => {
             </Card>
 
             {/* Programme électoral */}
-            <Card>
+            <Card className="border border-blue-200 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
@@ -263,7 +241,7 @@ const CandidatePage = () => {
           {/* Colonne latérale */}
           <div className="space-y-6">
             {/* Progression de la candidature */}
-            <Card>
+            <Card className="border border-blue-200 shadow-sm">
               <CardHeader>
                 <CardTitle>Progression</CardTitle>
               </CardHeader>
@@ -285,7 +263,7 @@ const CandidatePage = () => {
             </Card>
 
             {/* Documents requis */}
-            <Card>
+            <Card className="border border-blue-200 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
@@ -319,7 +297,7 @@ const CandidatePage = () => {
             </Card>
 
             {/* Calendrier électoral */}
-            <Card>
+            <Card className="border border-blue-200 shadow-sm">
               <CardHeader>
                 <CardTitle>Calendrier</CardTitle>
               </CardHeader>
@@ -346,7 +324,7 @@ const CandidatePage = () => {
             </Card>
 
             {/* Actions rapides */}
-            <Card>
+            <Card className="border border-blue-200 shadow-sm">
               <CardHeader>
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
@@ -366,8 +344,8 @@ const CandidatePage = () => {
             </Card>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 };
 

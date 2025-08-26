@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import SidebarCandidat from '@/components/SidebarCandidat';
-import Appbar from '@/components/AppbarCandidat';
-import FooterCandidat from '@/components/FooterCandidat';
+import AppShell from '@/components/common/AppShell';
 import {
   fetchCandidatureById,
   updateCandidature
@@ -55,11 +53,8 @@ const ModifierCandidature = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <SidebarCandidat />
-      <div className="flex-1 flex flex-col">
-        <Appbar title="Modifier Candidature" />
-        <main className="flex-1 flex items-center justify-center py-10 px-4">
+    <AppShell role="candidat" title="Modifier Candidature">
+      <div className="flex items-center justify-center py-4 px-4">
           <form
             onSubmit={handleSubmit}
             className="w-full max-w-xl bg-white p-6 md:p-8 rounded-2xl shadow-lg space-y-6"
@@ -113,10 +108,8 @@ const ModifierCandidature = () => {
               </button>
             </div>
           </form>
-        </main>
-        <FooterCandidat />
       </div>
-    </div>
+    </AppShell>
   );
 };
 

@@ -1,15 +1,31 @@
-const API_BASE_URL = "https://02d6a7afd014.ngrok-free.app/api";
-const STORAGE_BASE_URL = "https://02d6a7afd014.ngrok-free.app/storage";
+// =============================
+// API base configuration
+// =============================
+const API_BASE_URL = "https://b6427bc52a01.ngrok-free.app/api";
+const STORAGE_BASE_URL = "https://b6427bc52a01.ngrok-free.app/storage";
 
 const commonHeaders = {
   "ngrok-skip-browser-warning": "true",
   "Content-Type": "application/json",
+  "Accept": "application/json",
 };
 
+// Centralized auth header builder (accepts tokens stored under several common keys)
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('auth_token');
+  let token = localStorage.getItem('auth_token');
+  if (!token) token = localStorage.getItem('token') || sessionStorage.getItem('token') || sessionStorage.getItem('auth_token') || localStorage.getItem('access_token');
+  try {
+    if (!token) {
+      const user = JSON.parse(localStorage.getItem('user') || 'null');
+      token = user?.token || token;
+    }
+  } catch {}
   return { ...commonHeaders, Authorization: token ? `Bearer ${token}` : '' };
 };
+
+// =============================
+// Candidats: profils et documents
+// =============================
 
 export const updateCandidateProfile = async (candidateData: any) => {
   try {
@@ -62,6 +78,9 @@ export const fetchCandidatesByElection = async (electionId: string) => {
   }
 };
 
+// =============================
+// Votes
+// =============================
 export const checkUserVoteStatus = async (electionId: string) => {
   try {
     const response = await fetch(`${API_BASE_URL}/listes_votes?election_id=${electionId}`, {
@@ -119,6 +138,9 @@ export const voteForCandidate = async (candidatId: number, electionId: string) =
   }
 };
 
+// =============================
+// Assets helpers (programmes, photos)
+// =============================
 export const getProgramDownloadUrl = (programmePath: string) => {
   return `${STORAGE_BASE_URL}/${programmePath}`;
 };
@@ -199,7 +221,11 @@ export const submitCandidature = async (formData: FormData) => {
     const token = localStorage.getItem('auth_token');
     const response = await fetch(`${API_BASE_URL}/postuler`, {
       method: "POST",
-      headers: { ...commonHeaders, Authorization: token ? `Bearer ${token}` : '', 'Content-Type': 'multipart/form-data' },
+      headers: { 
+        "ngrok-skip-browser-warning": "true",
+        "Accept": "application/json",
+        Authorization: token ? `Bearer ${token}` : '' 
+      },
       body: formData,
     });
     if (!response.ok) {
@@ -292,7 +318,11 @@ export const updateCandidature = async (candidatureId: string, formData: FormDat
     const token = localStorage.getItem('auth_token');
     const response = await fetch(`${API_BASE_URL}/modifier_candidature/${candidatureId}`, {
       method: "POST", 
-      headers: { ...commonHeaders, Authorization: token ? `Bearer ${token}` : '', 'Content-Type': 'multipart/form-data' },
+      headers: { 
+        "ngrok-skip-browser-warning": "true",
+        "Accept": "application/json",
+        Authorization: token ? `Bearer ${token}` : '' 
+      },
       body: formData,
     });
     if (!response.ok) {
@@ -306,6 +336,49 @@ export const updateCandidature = async (candidatureId: string, formData: FormDat
   }
 };
 
+// =============================
+// Liste de toutes les candidatures (pour admin)
+// =============================
+export const fetchAllCandidatures = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/candidatures`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Erreur lors du chargement des candidatures:', error);
+    throw error;
+  }
+};
+
+// =============================
+// Candidatures par élection (pour admin)
+// =============================
+export const fetchCandidaturesByElection = async (electionId: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/candidatures/election/${electionId}`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Erreur lors du chargement des candidatures par élection:', error);
+    throw error;
+  }
+};
+
+// =============================
+// Profils (utilisateur / électeur)
+// =============================
 export const fetchUserProfile = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/user`, {
@@ -382,6 +455,9 @@ export const updateElectorProfile = async (userId: number, userData: any) => {
   }
 };
 
+// =============================
+// PVs (procès-verbaux)
+// =============================
 export const fetchActivePVs = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/liste_pvs_actifs`, {
@@ -454,6 +530,9 @@ export const fetchVotesForCandidate = async (electionId: number, candidatId: num
   }
 };
 
+// =============================
+// URLs helpers (stockage / images)
+// =============================
 export const getStorageUrl = (path?: string | null) => {
   if (!path) return null;
   const p = String(path).trim();
@@ -490,6 +569,9 @@ export const fetchCandidatesForElection = async (electionId: string) => {
   }
 };
 
+// =============================
+// Utilisateur courant & Authentification
+// =============================
 // New function to fetch current user profile
 export const fetchCurrentUser = async () => {
   try {
@@ -521,6 +603,24 @@ export const loginCandidate = async (email: string, password: string) => {
     return await response.json();
   } catch (error) {
     console.error("Login candidate failed:", error);
+    throw error;
+  }
+};
+
+export const loginElector = async (email: string, password: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/login-electeur`, {
+      method: "POST",
+      headers: commonHeaders,
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Login elector failed:", error);
     throw error;
   }
 };
@@ -558,6 +658,87 @@ export const logoutUser = async (token: string | null) => {
     return await response.json();
   } catch (error) {
     console.error("Logout failed:", error);
+    throw error;
+  }
+};
+
+// Simpler logout that relies on the stored token
+export const logout = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/logout`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Logout failed:", error);
+    throw error;
+  }
+};
+
+// =============================
+// Notifications
+// =============================
+export type NotificationItem = {
+  id: string;
+  type: string;
+  data?: any;
+  created_at: string;
+};
+
+export const fetchNotifications = async (): Promise<NotificationItem[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/notifications`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+    const data = await response.json();
+    // Some backends return an array directly, others under data
+    return (Array.isArray(data) ? data : (data?.data ?? [])) as NotificationItem[];
+  } catch (error) {
+    console.error('Erreur lors du chargement des notifications:', error);
+    throw error;
+  }
+};
+
+export const markNotificationsRead = async (ids: string[]) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/notifications/read`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ids }),
+    });
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Erreur lors du marquage des notifications comme lues:', error);
+    throw error;
+  }
+};
+
+export const markNotificationRead = async (id: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) {
+      throw new Error(`Error: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Erreur lors du marquage de la notification comme lue:', error);
     throw error;
   }
 };

@@ -1,13 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { DownloadIcon } from 'lucide-react';
-import SidebarCandidat from '@/components/SidebarCandidat';
-import Appbar from '@/components/AppbarCandidat';
-import FooterCandidat from '@/components/FooterCandidat';
-import {
-  fetchActivePVs,
-  getPvDownloadProps
-} from '../api';
+import AppShell from '@/components/common/AppShell';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { fetchActivePVs, getPvDownloadProps } from '../api';
+import { FileText, Download, Calendar, Search } from 'lucide-react';
 
 interface PV {
   id: number;
@@ -18,120 +15,122 @@ interface PV {
   election?: { titre?: string };
 }
 
-// Skeleton de carte (UI only)
-const PvSkeleton: React.FC = () => (
-  <Card className="shadow-xl border border-blue-100">
-    <CardContent className="p-5 space-y-3">
-      <div className="h-5 w-40 bg-gray-200 rounded animate-pulse" />
-      <div className="h-4 w-56 bg-gray-200 rounded animate-pulse" />
-      <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-      <div className="mt-4 h-8 w-36 bg-gray-200 rounded animate-pulse mx-auto" />
-    </CardContent>
-  </Card>
-);
+const PvCandidat = () => {
+  const [pvs, setPvs] = useState<PV[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
-const PVList: React.FC = () => {
-  // Rendu immédiat si déjà consulté
-  const cached: PV[] = (() => {
+  useEffect(() => {
+    loadPvList();
+  }, []);
+
+  const loadPvList = async () => {
     try {
-      return JSON.parse(localStorage.getItem('pvs_actifs') || '[]');
-    } catch {
-      return [];
-    }
-  })();
-
-  const [pvs, setPvs] = useState<PV[]>(cached);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const fetchPVs = async () => {
-    setLoading(true);
-    setError('');
-    try {
+      setLoading(true);
       const data = await fetchActivePVs();
       const actifs = data.filter(
         (pv: PV) => pv.statut === true || pv.statut === 1 || pv.statut === '1'
       );
       setPvs(actifs);
-      localStorage.setItem('pvs_actifs', JSON.stringify(actifs));
-    } catch (err: any) {
-      console.error('Erreur :', err);
-      setError(err.message || 'Erreur lors du chargement des PVs.');
+    } catch (error) {
+      console.error('Erreur lors du chargement des PVs:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchPVs();
-  }, []);
+  const getStatutBadge = (statut: boolean | number | string) => {
+    if (statut === true || statut === 1 || statut === '1') {
+      return <Badge variant="default" className="bg-green-100 text-green-800">Actif</Badge>;
+    }
+    return <Badge variant="secondary">Inactif</Badge>;
+  };
+
+  const filteredPvs = pvs.filter(pv =>
+    pv.titre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    pv.election?.titre?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <AppShell role="candidat" title="Procès-verbaux">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">Chargement des procès-verbaux...</div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
-      <Appbar title="Espace Électeur" />
+    <AppShell role="candidat" title="Procès-verbaux">
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Procès-verbaux</h1>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher un PV..."
+              className="pl-10 w-full md:w-72"
+            />
+          </div>
+        </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <SidebarCandidat />
-
-        <main className="flex-1 pl-4 md:pl-72 pr-6 pt-6 pb-10 bg-white dark:bg-gray-900 overflow-y-auto min-h-[calc(100vh-80px)]">
-          <h1 className="text-3xl font-bold text-blue-600 mt-14 mb-8 text-center">
-            Liste des Procès-Verbaux
-          </h1>
-
-          {error && <p className="text-red-500 text-center mb-4">{error}</p>}
-
-          {loading ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <PvSkeleton /><PvSkeleton /><PvSkeleton />
-            </div>
-          ) : (
-            <>
-              {pvs.length === 0 ? (
-                <div className="text-center text-gray-500">Aucun PV actif trouvé.</div>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {pvs.map((pv) => {
-                    const { href, download } = getPvDownloadProps(pv);
-
-                    return (
-                      <Card key={pv.id} className="shadow-xl border border-blue-400">
-                        <CardContent className="p-5 space-y-3">
-                          <h2 className="text-xl font-semibold text-blue-700">
-                            {pv.titre}
-                          </h2>
-
-                          <p className="text-sm text-gray-600">
-                            Élection :{' '}
-                            <strong>{pv.election?.titre ?? 'Titre non dispo'}</strong>
+        {filteredPvs.length === 0 ? (
+          <div className="text-center py-12">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun procès-verbal trouvé</h3>
+            <p className="text-gray-500">
+              {searchQuery ? 'Aucun PV ne correspond à votre recherche.' : 'Aucun procès-verbal disponible pour le moment.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPvs.map((pv) => {
+              const { href, download } = getPvDownloadProps(pv);
+              
+              return (
+                <div key={pv.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition">
+                  <div className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-foreground text-lg mb-2 line-clamp-2">
+                          {pv.titre}
+                        </h3>
+                        {pv.election?.titre && (
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Élection : {pv.election.titre}
                           </p>
+                        )}
+                      </div>
+                    </div>
 
-                          <p className="text-sm text-gray-600">Date : {pv.date_generation}</p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <Calendar className="h-4 w-4 mr-2" />
+                          {new Date(pv.date_generation).toLocaleDateString('fr-FR')}
+                        </div>
+                        {getStatutBadge(pv.statut)}
+                      </div>
 
-                          <div className="flex justify-center items-center mt-4">
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded"
-                              download={download}
-                            >
-                              <DownloadIcon size={16} /> Télécharger
-                            </a>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                      <Button variant="outline" size="sm" className="w-full" asChild>
+                        <a href={href} download={download}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Télécharger le PV
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </>
-          )}
-        </main>
+              );
+            })}
+          </div>
+        )}
       </div>
-
-      <FooterCandidat />
-    </div>
+    </AppShell>
   );
 };
 
-export default PVList;
+export default PvCandidat;

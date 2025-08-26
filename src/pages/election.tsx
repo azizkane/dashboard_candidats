@@ -1,15 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Appbar from '../components/AppbarElecteur';
-import SidebarElecteur from '../components/SidebarElecteur';
-import FooterElecteur from '../components/FooterElecteur';
+import AppShell from '@/components/common/AppShell';
 import {
   fetchElectionsList,
   getElectionImageUrl
 } from '../api';
 
+interface Election {
+  id: number;
+  titre: string;
+  description?: string;
+  image?: string;
+  date_debut?: string;
+  date_fin?: string;
+}
+
 const Elections = () => {
-  const [elections, setElections] = useState([]);
+  const [elections, setElections] = useState<Election[]>([]);
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,94 +33,45 @@ const Elections = () => {
     getElections();
   }, []);
 
-  const handleParticiper = (id: string) => {
+  const handleParticiper = (id: number) => {
     navigate(`/election/${id}/candidats`);
   };
 
   return (
     <div className="elections-page">
-      <Appbar title="Espace Électeur" />
-      <div className="elections-layout">
-        <SidebarElecteur />
-        <div className="elections-main">
-          <h2 className="elections-title">Liste des élections</h2>
-          <div className="election-cards">
-            {elections.map((election: any) => (
-              <div className="election-card" key={election.id}>
+      <AppShell role="electeur" title="Espace Électeur">
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground">Liste des élections</h2>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Rechercher…"
+              className="w-full md:w-72 px-3 py-2 border rounded-lg"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {elections
+              .filter((e: Election) => !query || (e.titre || '').toLowerCase().includes(query.toLowerCase()))
+              .map((election: Election) => (
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-blue-200 hover:shadow-md transition" key={election.id}>
                 <img
                   src={getElectionImageUrl(election.image)}
                   alt={election.titre}
-                  className="w-full h-32 object-cover rounded-t-lg"
+                  className="w-full h-32 object-cover rounded-xl mb-3"
                 />
-                <h3>{election.titre}</h3>
-                <p>{election.description}</p>
+                <h3 className="font-semibold text-foreground">{election.titre}</h3>
+                <p className="text-sm text-muted-foreground">{election.description}</p>
                 <p><strong>Date de début :</strong> {election.date_debut}</p>
                 <p><strong>Date de fin :</strong> {election.date_fin}</p>
-                <button onClick={() => handleParticiper(election.id)}>
+                <button onClick={() => handleParticiper(election.id)} className="mt-3 inline-flex items-center justify-center px-4 py-2 rounded-full bg-[#275dad] text-white font-semibold hover:bg-[#1f4c8d]">
                   Voir candidats
                 </button>
               </div>
             ))}
           </div>
         </div>
-      </div>
-      <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
-            <FooterElecteur />
-      </div>
-      
-
-      <style>
-        {`
-          .elections-layout {
-            display: flex;
-            background-color: #f0f4f8;
-          }
-
-          .elections-main {
-            flex: 1;
-            padding: 2rem;
-            margin-left: 250px;
-          }
-
-          .elections-title {
-            color: #007bff;
-            margin-bottom: 2rem;
-          }
-
-          .election-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-          }
-
-          .election-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            border-left: 4px solid #03a9f4;
-          }
-
-          .election-card h3 {
-            margin-top: 0;
-          }
-
-          .election-card button {
-            margin-top: 1rem;
-            padding: 0.6rem 1rem;
-            background-color: #03a9f4;
-            border: none;
-            color: white;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-          }
-
-          .election-card button:hover {
-            background-color: #0288d1;
-          }
-        `}
-      </style>
+      </AppShell>
     </div>
   );
 };

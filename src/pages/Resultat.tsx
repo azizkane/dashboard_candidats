@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import SidebarElecteur from '@/components/SidebarElecteur';
-import AppBar from '@/components/AppbarElecteur';
-import FooterElecteur from '@/components/FooterElecteur';
+import AppShell from '@/components/common/AppShell';
 import {
   fetchElectionsList,
-  getElectionImageUrl
-} from '../api'; // Assuming getElectionImageUrl is also in api.ts
+  getElectionImageUrl,
+  fetchCandidatesByElection,
+  fetchVotesForCandidate
+} from '../api';
 
 interface Election {
   id: number;
@@ -19,9 +19,47 @@ interface Election {
 
 const ResultatsElecteur: React.FC = () => {
   const [elections, setElections] = useState<Election[]>([]);
+  const [selectedElection, setSelectedElection] = useState<Election | null>(null);
   const [loadingElections, setLoadingElections] = useState<boolean>(false);
   const [errMsg, setErrMsg] = useState<string>('');
+  
+  // États pour les résultats
+  const [candidats, setCandidats] = useState<any[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
+  const [totalVotes, setTotalVotes] = useState(0);
+  
   const navigate = useNavigate();
+
+  // Fonction pour charger les résultats d'une élection
+  const loadElectionResults = async (electionId: number) => {
+    try {
+      setLoadingResults(true);
+      const candidatsData = await fetchCandidatesByElection(electionId.toString());
+      
+      // Récupérer les votes pour chaque candidat
+      const candidatsAvecVotes = await Promise.all(
+        candidatsData.map(async (candidat: any) => {
+          try {
+            const votes = await fetchVotesForCandidate(electionId, candidat.id);
+            return { ...candidat, votes_count: votes };
+          } catch (error) {
+            console.error(`Erreur lors du chargement des votes pour ${candidat.id}:`, error);
+            return { ...candidat, votes_count: 0 };
+          }
+        })
+      );
+      
+      setCandidats(candidatsAvecVotes);
+      
+      // Calculer le total des votes
+      const total = candidatsAvecVotes.reduce((sum: number, candidat: any) => sum + (candidat.votes_count || 0), 0);
+      setTotalVotes(total);
+    } catch (error) {
+      console.error("Erreur lors du chargement des résultats:", error);
+    } finally {
+      setLoadingResults(false);
+    }
+  };
 
   useEffect(() => {
     const getElections = async () => {
@@ -41,14 +79,11 @@ const ResultatsElecteur: React.FC = () => {
 
   return (
     <>
-      <div className="flex min-h-screen bg-gray-100">
-        <SidebarElecteur />
-
-        <div className="flex-1 ml-64 flex flex-col min-h-screen bg-gray-100">
-          <AppBar title="Espace Électeur" />
-
-          <div className="flex-grow p-6 mt-16 max-w-7xl mx-auto w-full">
-            <h1 className="text-2xl md:text-3xl font-bold text-blue-700 mb-6">Résultats par Élection</h1>
+      <AppShell role="electeur" title="Résultats par Élection">
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">Résultats par Élection</h1>
+            </div>
 
             {errMsg && <div className="text-center text-red-600 font-medium mb-4">{errMsg}</div>}
 
@@ -59,33 +94,99 @@ const ResultatsElecteur: React.FC = () => {
                 {elections.map((election) => (
                   <div
                     key={election.id}
-                    onClick={() => navigate(`/resultat/${election.id}/candidats`)}
-                    className="cursor-pointer border-2 rounded-xl overflow-hidden shadow-sm transition transform hover:scale-105 border-gray-200"
+                    className="bg-white p-5 rounded-2xl shadow-sm border border-blue-200 hover:shadow-md transition cursor-pointer"
+                    onClick={async () => {
+                      setSelectedElection(election);
+                      await loadElectionResults(election.id);
+                    }}
                   >
                     <img
                       src={getElectionImageUrl(election.image || '')}
                       alt={election.titre}
-                      className="w-full h-32 object-cover"
+                      className="w-full h-32 object-cover rounded-xl mb-3"
                     />
-                    <div className="p-4">
-                      <h3 className="text-lg font-semibold text-gray-800">{election.titre}</h3>
-                      <p className="text-sm text-gray-500">{election.description}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Début : {election.date_debut} | Fin : {election.date_fin}
-                      </p>
-                      <p className="mt-2 text-sm text-blue-600 font-medium">
-                        Cliquer pour voir les résultats
-                      </p>
-                    </div>
+                    <h3 className="font-semibold text-foreground">{election.titre}</h3>
+                    <p className="text-sm text-muted-foreground">{election.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Début : {election.date_debut} • Fin : {election.date_fin}
+                    </p>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      <FooterElecteur />
+        {selectedElection && (
+          <div
+            className="fixed inset-0 z-[1000] flex items-start md:items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setSelectedElection(null)}
+          >
+            <div
+              className="w-full max-w-md bg-white rounded-2xl shadow-xl border"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b">
+                <h3 className="text-lg font-semibold text-foreground">
+                  {`Résultats — Élection #${selectedElection.id}`}
+                </h3>
+                <button
+                  aria-label="Fermer"
+                  className="text-gray-500 hover:text-gray-800 text-xl leading-none"
+                  onClick={() => setSelectedElection(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="px-5 py-6">
+                {loadingResults ? (
+                  <div className="text-center text-gray-600">Chargement des résultats...</div>
+                ) : candidats.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="text-center mb-4">
+                      <p className="text-sm text-muted-foreground">
+                        Total des votes : <span className="font-semibold text-foreground">{totalVotes}</span>
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {candidats
+                        .sort((a, b) => (b.votes_count || 0) - (a.votes_count || 0))
+                        .map((candidat, index) => (
+                          <div key={candidat.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <span className="text-lg font-bold text-blue-600">#{index + 1}</span>
+                              <div>
+                                <p className="font-medium text-foreground">
+                                  {candidat.prenom} {candidat.nom}
+                                </p>
+                                <p className="text-sm text-muted-foreground">{candidat.email}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-foreground">
+                                {candidat.votes_count || 0} vote{(candidat.votes_count || 0) > 1 ? 's' : ''}
+                              </p>
+                              {totalVotes > 0 && (
+                                <p className="text-sm text-muted-foreground">
+                                  {Math.round(((candidat.votes_count || 0) / totalVotes) * 100)}%
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-600">
+                    Aucun candidat trouvé pour cette élection.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </AppShell>
     </>
   );
 };

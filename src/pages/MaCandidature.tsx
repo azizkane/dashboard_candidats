@@ -1,41 +1,49 @@
 import React, { useEffect, useState } from 'react';
-import SidebarCandidat from '@/components/SidebarCandidat';
-import Appbar from '@/components/AppbarCandidat';
-import FooterCandidat from '@/components/FooterCandidat';
 import { useNavigate } from 'react-router-dom';
-import {
-  fetchMyCandidature,
-  deleteCandidature,
-  getDocumentDownloadUrl
+import AppShell from '@/components/common/AppShell';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { 
+  fetchMyCandidature, 
+  deleteCandidature, 
+  getDocumentDownloadUrl 
 } from '../api';
+import { Edit, Trash2, Download, FileText, Mail } from 'lucide-react';
 
 interface Candidature {
   id: number;
-  email?: string;
-  election: {
+  email: string;
+  election?: {
     titre: string;
   };
-  programme: string;
-  lettre_motivation: string;
   slogan: string;
+  programme?: string;
+  lettre_motivation?: string;
+  date_soumission?: string;
+  statut?: string;
 }
 
 const MaCandidature = () => {
   const [candidature, setCandidature] = useState<Candidature | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const getCandidature = async () => {
-      try {
-        const data = await fetchMyCandidature();
-        setCandidature(data);
-      } catch (err) {
-        console.error('Erreur lors du chargement de la candidature', err);
-      }
-    };
-
-    getCandidature();
+    loadCandidature();
   }, []);
+
+  const loadCandidature = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchMyCandidature();
+      setCandidature(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement de la candidature:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleModifier = () => {
     if (candidature) {
@@ -45,89 +53,169 @@ const MaCandidature = () => {
 
   const handleSupprimer = async () => {
     if (!candidature) return;
-    const confirm = window.confirm('Voulez-vous vraiment supprimer votre candidature ?');
+    
+    const confirm = window.confirm('Voulez-vous vraiment supprimer votre candidature ? Cette action est irréversible.');
     if (!confirm) return;
 
     try {
+      setDeleting(true);
       await deleteCandidature(candidature.id);
       alert('Candidature supprimée avec succès.');
-      navigate('/candidat/dashboard');
-    } catch (err) {
-      console.error('Erreur lors de la suppression', err);
-      alert('Une erreur est survenue.');
+      setCandidature(null);
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      alert('Erreur lors de la suppression de la candidature.');
+    } finally {
+      setDeleting(false);
     }
   };
 
-  return (
-    <div className="flex min-h-screen bg-gray-50">
-      <SidebarCandidat />
-      <div className="flex-1 flex flex-col">
-        <Appbar title="Espace Candidat" />
-        <main className="flex-1 flex items-center justify-center px-4 py-8">
-          <div className="w-full max-w-3xl bg-white p-6 sm:p-8 rounded-xl shadow border border-gray-200">
-            <h1 className="text-2xl sm:text-3xl font-bold text-blue-700 mb-6 text-center">Ma Candidature</h1>
+  const getStatutBadge = (statut?: string) => {
+    switch (statut?.toLowerCase()) {
+      case 'approuvée':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Approuvée</Badge>;
+      case 'rejetée':
+        return <Badge variant="destructive">Rejetée</Badge>;
+      case 'en_attente':
+        return <Badge variant="secondary">En attente</Badge>;
+      default:
+        return <Badge variant="outline">Non définie</Badge>;
+    }
+  };
 
-            {!candidature ? (
-              <p className="text-center text-gray-500">Chargement en cours...</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-gray-800">
-                <div className="space-y-3">
-                  {candidature.email && (
-                    <p><span className="font-semibold">📧 Email :</span> {candidature.email}</p>
-                  )}
-                  <p><span className="font-semibold">🗳️ Élection :</span> {candidature.election?.titre}</p>
-                  <p><span className="font-semibold">💬 Slogan :</span> {candidature.slogan}</p>
-                </div>
+  if (loading) {
+    return (
+      <AppShell role="candidat" title="Ma Candidature">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">Chargement de la candidature...</div>
+        </div>
+      </AppShell>
+    );
+  }
 
-                <div className="space-y-4">
-                  <div>
-                    <p className="font-semibold">📄 Programme :</p>
-                    <a
-                      href={getDocumentDownloadUrl(candidature.programme)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                     Téléverser le programme
-                    </a>
-                  </div>
-
-                  <div>
-                    <p className="font-semibold">📝 Lettre de motivation :</p>
-                    <a
-                      href={getDocumentDownloadUrl(candidature.lettre_motivation)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      Téléverser la lettre
-                    </a>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {candidature && (
-              <div className="mt-8 flex justify-center gap-4">
-                <button
-                  onClick={handleModifier}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-2 rounded-lg font-semibold shadow"
-                >
-                  ✏️ 
-                </button>
-                <button
-                  onClick={handleSupprimer}
-                  className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-lg font-semibold shadow"
-                >
-                  🗑️
-                </button>
-              </div>
-            )}
+  if (!candidature) {
+    return (
+      <AppShell role="candidat" title="Ma Candidature">
+        <div className="space-y-6">
+          <div className="text-center">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Aucune candidature</h1>
+            <p className="text-muted-foreground mb-6">
+              Vous n'avez pas encore déposé de candidature pour une élection.
+            </p>
+            <Button onClick={() => navigate('/electeur/candidature')} variant="democratic">
+              Déposer une candidature
+            </Button>
           </div>
-        </main>
-        <FooterCandidat />
+        </div>
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell role="candidat" title="Ma Candidature">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Ma Candidature</h1>
+          <div className="flex gap-3">
+            <Button onClick={handleModifier} variant="outline">
+              <Edit className="h-4 w-4 mr-2" />
+              Modifier
+            </Button>
+            <Button onClick={handleSupprimer} variant="destructive" disabled={deleting}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              {deleting ? 'Suppression...' : 'Supprimer'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Informations principales */}
+        <div className="bg-white rounded-2xl shadow-sm border p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Informations de la candidature</h3>
+              
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Statut</p>
+                <div className="mt-1">
+                  {getStatutBadge(candidature.statut)}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Élection</p>
+                <p className="mt-1 text-sm text-foreground">
+                  {candidature.election?.titre || 'Non spécifiée'}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Slogan</p>
+                <p className="mt-1 text-sm text-foreground italic">
+                  "{candidature.slogan || 'Aucun slogan'}"
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Date de soumission</p>
+                <p className="mt-1 text-sm text-foreground">
+                  {candidature.date_soumission 
+                    ? new Date(candidature.date_soumission).toLocaleDateString('fr-FR')
+                    : 'Non spécifiée'
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Documents</h3>
+              
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Programme électoral</p>
+                {candidature.programme ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={getDocumentDownloadUrl(candidature.programme)} target="_blank" rel="noopener noreferrer">
+                      <Download className="h-4 w-4 mr-2" />
+                      Télécharger le programme
+                    </a>
+                  </Button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aucun programme joint</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Lettre de motivation</p>
+                {candidature.lettre_motivation ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={getDocumentDownloadUrl(candidature.lettre_motivation)} target="_blank" rel="noopener noreferrer">
+                      <Download className="h-4 w-4 mr-2" />
+                      Télécharger la lettre
+                    </a>
+                  </Button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Aucune lettre jointe</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions rapides */}
+        <div className="bg-blue-50 rounded-2xl p-6 border border-blue-200">
+          <h3 className="text-lg font-semibold text-blue-900 mb-4">Actions rapides</h3>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" onClick={() => navigate('/candidat/elections')}>
+              <FileText className="h-4 w-4 mr-2" />
+              Voir les élections
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/candidat/resultats')}>
+              <Mail className="h-4 w-4 mr-2" />
+              Consulter les résultats
+            </Button>
+          </div>
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 };
 
