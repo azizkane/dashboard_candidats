@@ -1,7 +1,7 @@
 // src/pages/LoginCandidat.tsx
 import { useState } from 'react';
 import LoginTemplate from '@/components/Logintemplate';
-import axios from 'axios';
+import { loginCandidate } from '@/api';
 import { useNavigate } from 'react-router-dom';
 
 const LoginCandidat = () => {
@@ -13,10 +13,13 @@ const LoginCandidat = () => {
     setErrorMessage('');
     setLoading(true);
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/login-candidat', { email, password });
-      localStorage.setItem('auth_token', response.data.token);
+      const data = await loginCandidate(email, password);
+      const token: string = data?.token ?? '';
+      if (!token) throw new Error('Token manquant');
+      localStorage.setItem('auth_token', token);
+      sessionStorage.setItem('auth_token', token);
       navigate('/dashbord-candidat');
-    } catch {
+    } catch (e) {
       setErrorMessage('Email ou mot de passe incorrect');
     } finally {
       setLoading(false);

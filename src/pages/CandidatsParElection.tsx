@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import Appbar from '../components/AppbarElecteur';
-import SidebarElecteur from '../components/SidebarElecteur';
-import FooterElecteur from '../components/FooterElecteur';
+import AppShell from '@/components/common/AppShell';
+import {
+  fetchCandidatesByElection,
+  checkUserVoteStatus,
+  fetchCandidatureDetails,
+  voteForCandidate,
+  getProgramDownloadUrl,
+  getCandidatePhotoUrl
+} from '../api';
 
 const CandidatsParElection = () => {
   const { id: electionId } = useParams();
@@ -23,39 +28,27 @@ const CandidatsParElection = () => {
   }, [electionId]);
 
   const fetchCandidats = async () => {
-    const token = localStorage.getItem('auth_token');
     try {
-      const res = await axios.get(`http://localhost:8000/api/candidats_par_election/${electionId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCandidats(res.data.data || []);
+      const data = await fetchCandidatesByElection(electionId as string);
+      setCandidats(data);
     } catch (err) {
       console.error('Erreur lors du chargement des candidats', err);
     }
   };
 
   const verifierSiDejaVote = async () => {
-    const token = localStorage.getItem('auth_token');
     try {
-      const res = await axios.get(`http://localhost:8000/api/listes_votes?election_id=${electionId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const userId = JSON.parse(atob(token.split('.')[1])).sub;
-      const aVote = res.data.data.some((vote: any) => vote.user_id == userId);
-      setADejaVote(aVote);
+      const hasVoted = await checkUserVoteStatus(electionId as string);
+      setADejaVote(hasVoted);
     } catch (err) {
       console.error('Erreur lors de la vérification du vote', err);
     }
   };
 
-  const fetchCandidatureDetails = async (candidatId: number) => {
-    const token = localStorage.getItem('auth_token');
+  const fetchCandidatureDetailsData = async (candidatId: number) => {
     try {
-      const res = await axios.get(`http://localhost:8000/api/candidature/${electionId}/${candidatId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCandidatureDetails(prev => ({ ...prev, [candidatId]: res.data.data }));
+      const details = await fetchCandidatureDetails(electionId as string, candidatId);
+      setCandidatureDetails(prev => ({ ...prev, [candidatId]: details }));
     } catch (error) {
       console.error("Erreur lors du chargement de la candidature", error);
     }
@@ -65,7 +58,7 @@ const CandidatsParElection = () => {
     if (detailsVisibles === candidatId) {
       setDetailsVisibles(null);
     } else {
-      await fetchCandidatureDetails(candidatId);
+      await fetchCandidatureDetailsData(candidatId);
       setDetailsVisibles(candidatId);
     }
   };
@@ -82,56 +75,56 @@ const CandidatsParElection = () => {
 
     if (confirm.isConfirmed) {
       try {
-        const token = localStorage.getItem('auth_token');
-        await axios.post('http://localhost:8000/api/voter', {
-          candidat_id: candidatId,
-          election_id: electionId,
-        }, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
+        await voteForCandidate(candidatId, electionId as string);
         Swal.fire('Vote enregistré !', '', 'success');
         setADejaVote(true);
       } catch (error: any) {
-        const message = error.response?.data?.message || 'Impossible de voter.';
+        const message = error.message || 'Impossible de voter.';
         Swal.fire('Erreur', message, 'error');
       }
     }
   };
 
   const handleTelechargementProgramme = (programmePath: string) => {
-    const url = `http://localhost:8000/storage/${programmePath}`;
+    const url = getProgramDownloadUrl(programmePath);
     window.open(url, '_blank');
   };
 
   return (
     <div className="candidats-page">
-      <Appbar title="Liste des candidats" />
-      <div className="candidats-layout">
-        <SidebarElecteur />
-        <div className="candidats-main">
-          <h2 className="candidats-title">Candidats à cette élection</h2>
-          <div className="candidat-cards">
+      <AppShell role="electeur" title="Liste des candidats">
+        <div className="p-4 md:p-6 space-y-4">
+          {aDejaVote && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 text-blue-800 px-4 py-3">
+              Vous avez déjà voté pour cette élection.
+            </div>
+          )}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground">Candidats à cette élection</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {Array.isArray(candidats) && candidats.map((candidat: any) => {
               const details = candidatureDetails[candidat.id];
 
               return (
-                <div className="candidat-card" key={candidat.id}>
+                <div
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-blue-200 hover:shadow-md transition text-center"
+                  key={candidat.id}
+                >
                   <img
-                    src={candidat.profil ? `http://localhost:8000/storage/${candidat.profil}` : '/user.png'}
+                    src={getCandidatePhotoUrl(candidat.profil)}
                     alt={candidat.nom}
-                    className="candidat-image"
+                    className="w-20 h-20 rounded-full object-cover mx-auto mb-2"
                   />
-                  <h3>{candidat.prenom} {candidat.nom}</h3>
-                  <p className="email">{candidat.email}</p>
+                  <h3 className="font-semibold text-foreground">{candidat.prenom} {candidat.nom}</h3>
+                  <p className="text-sm text-muted-foreground">{candidat.email}</p>
 
                   {detailsVisibles === candidat.id && details && (
-                    <div className="details">
+                    <div className="mt-2 text-left text-sm">
                       <p><strong>Slogan :</strong> {details.slogan || 'Non renseigné'}</p>
-                      <p><strong>Programme :</strong></p>
                       {details.programme && (
                         <button
-                          className="download-button"
+                          className="mt-2 inline-flex items-center justify-center px-4 py-2 rounded-full bg-[#07beb8] text-[#040f0f] font-semibold hover:opacity-90"
                           onClick={() => handleTelechargementProgramme(details.programme)}
                         >
                           Télécharger le programme
@@ -140,11 +133,23 @@ const CandidatsParElection = () => {
                     </div>
                   )}
 
-                  <div className="buttons">
-                    {!aDejaVote && (
-                      <button onClick={() => voterPourCandidat(candidat.id)}>Voter</button>
+                  <div className="flex gap-2 justify-center mt-3">
+                    {!aDejaVote ? (
+                      <button
+                        onClick={() => voterPourCandidat(candidat.id)}
+                        className="px-4 py-2 rounded-full bg-[#275dad] text-white font-semibold hover:bg-[#1f4c8d]"
+                      >
+                        Voter
+                      </button>
+                    ) : (
+                      <span className="px-4 py-2 rounded-full border border-blue-300 bg-blue-50 text-blue-800 text-sm font-semibold">
+                        Vote enregistré
+                      </span>
                     )}
-                    <button onClick={() => toggleDetails(candidat.id)}>
+                    <button
+                      onClick={() => toggleDetails(candidat.id)}
+                      className="px-4 py-2 rounded-full border border-blue-300 hover:bg-blue-50"
+                    >
                       {detailsVisibles === candidat.id ? 'Masquer' : 'Voir plus'}
                     </button>
                   </div>
@@ -153,124 +158,9 @@ const CandidatsParElection = () => {
             })}
           </div>
         </div>
-      </div>
-      <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
-        <FooterElecteur />
-      </div>
-
-      <style>
-        {`
-          .candidats-layout {
-            display: flex;
-            background-color: #f9f9f9;
-          }
-
-          .candidats-main {
-            flex: 1;
-            padding: 2rem;
-            margin-left: 250px;
-          }
-
-          .candidats-title {
-            color: #1976d2;
-            margin-bottom: 1.5rem;
-          }
-
-          .candidat-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1rem;
-          }
-
-          @media (min-width: 1024px) {
-            .candidat-cards {
-              grid-template-columns: repeat(3, 1fr);
-            }
-          }
-
-          .candidat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            text-align: center;
-            border-left: 4px solid #03a9f4;
-            transition: transform 0.2s ease;
-          }
-
-          .candidat-card:hover {
-            transform: scale(1.02);
-          }
-
-          .candidat-image {
-            width: 80px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 50%;
-            margin: 0 auto 0.5rem;
-            display: block;
-          }
-
-          .candidat-card h3 {
-            font-size: 1.1rem;
-            margin: 0.3rem 0 0.3rem;
-            color: #333;
-          }
-
-          .candidat-card .email {
-            font-size: 0.9rem;
-            color: #666;
-            margin-bottom: 0.8rem;
-          }
-
-          .details {
-            margin-top: 0.5rem;
-            text-align: left;
-            font-size: 0.9rem;
-          }
-
-          .download-button {
-            margin-top: 0.5rem;
-            padding: 0.4rem 0.7rem;
-            font-size: 0.85rem;
-            background-color: #4caf50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-          }
-
-          .download-button:hover {
-            background-color: #388e3c;
-          }
-
-          .buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 1rem;
-          }
-
-          .buttons button {
-            flex: 1;
-            padding: 0.5rem 0.9rem;
-            background-color: #03a9f4;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 0.85rem;
-            cursor: pointer;
-          }
-
-          .buttons button:hover {
-            background-color: #0288d1;
-          }
-        `}
-      </style>
+      </AppShell>
     </div>
   );
 };
 
 export default CandidatsParElection;
-
-  

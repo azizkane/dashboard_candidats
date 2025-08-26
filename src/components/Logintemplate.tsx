@@ -45,7 +45,7 @@ const LoginTemplate: React.FC<LoginTemplateProps> = ({
       </div>
 
       {/* RIGHT SIDE */}
-      <div className="w-1/2 flex justify-center items-center bg-white">
+      <div className="w-1/2 flex justify-center items-center bg-white relative">
         <form onSubmit={submit} className="w-full max-w-md px-8">
           <div className="flex justify-center mb-6">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">

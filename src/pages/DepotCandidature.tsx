@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import Appbar from '../components/AppbarElecteur';
-import SidebarElecteur from '../components/SidebarElecteur';
-import FooterElecteur from '../components/FooterElecteur';
+import AppShell from '@/components/common/AppShell';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { fetchUsers, fetchElections, submitCandidature } from '../api';
+import { Upload } from 'lucide-react';
+
+interface UserOption { id: number; email: string }
+interface ElectionOption { id: number; titre: string }
 
 const DepotCandidature = () => {
-  const [users, setUsers] = useState([]);
-  const [elections, setElections] = useState([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [elections, setElections] = useState<ElectionOption[]>([]);
 
   const [userId, setUserId] = useState('');
   const [electionId, setElectionId] = useState('');
@@ -14,27 +21,35 @@ const DepotCandidature = () => {
   const [lettreMotivationFile, setLettreMotivationFile] = useState<File | null>(null);
   const [slogan, setSlogan] = useState('');
   const [dateSoumission, setDateSoumission] = useState('');
+  const [submitted, setSubmitted] = useState<null | {
+    userEmail: string;
+    electionTitre: string;
+    date: string;
+    slogan: string;
+    programme?: string;
+    lettre?: string;
+  }>(null);
 
   const fetchData = async () => {
-    const token = localStorage.getItem('auth_token');
     try {
-      const [usersRes, electionsRes] = await Promise.all([
-        axios.get('http://localhost:8000/api/users', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get('http://localhost:8000/api/liste_elections', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [usersData, electionsData] = await Promise.all([
+        fetchUsers(),
+        fetchElections(),
       ]);
-      setUsers(usersRes.data.data || []);
-      setElections(electionsRes.data.data || []);
+      setUsers(usersData as UserOption[]);
+      setElections(electionsData as ElectionOption[]);
     } catch (error) {
       console.error('Erreur de chargement des données :', error);
     }
   };
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem('auth_token');
+    // Validation des champs requis
+    if (!userId || !electionId || !dateSoumission || !slogan) {
+      alert('Veuillez remplir tous les champs obligatoires (Utilisateur, Élection, Date de soumission, Slogan)');
+      return;
+    }
+
     const formData = new FormData();
 
     formData.append('user_id', userId);
@@ -45,19 +60,25 @@ const DepotCandidature = () => {
     formData.append('date_soumission', new Date(dateSoumission).toISOString().split('T')[0]);
 
     try {
-      await axios.post('http://localhost:8000/api/postuler', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      await submitCandidature(formData);
       alert('Candidature soumise avec succès !');
+      const selectedUser = users.find(u => String(u.id) === userId);
+      const selectedElection = elections.find(e => String(e.id) === electionId);
+      setSubmitted({
+        userEmail: selectedUser?.email ?? '',
+        electionTitre: selectedElection?.titre ?? '',
+        date: dateSoumission,
+        slogan,
+        programme: programmeFile?.name,
+        lettre: lettreMotivationFile?.name,
+      });
       setUserId('');
       setElectionId('');
       setProgrammeFile(null);
       setLettreMotivationFile(null);
       setSlogan('');
       setDateSoumission('');
+      setOpen(false);
     } catch (err) {
       alert('Erreur lors de la soumission.');
     }
@@ -67,154 +88,112 @@ const DepotCandidature = () => {
     fetchData();
   }, []);
 
+  const [open, setOpen] = useState(false);
+
   return (
-    <div className="candidature-page">
-      <Appbar title="Espace Électeur" />
-      <div className="candidature-layout">
-        <SidebarElecteur />
-        <div className="candidature-main">
-          <div className="candidature-form">
-            <h2 className="candidature-title">Ajouter une candidature</h2>
+    <AppShell role="electeur" title="Espace Électeur">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Déposer une candidature</h1>
+          <Button variant="democratic" onClick={() => setOpen(true)}>Nouvelle candidature</Button>
+        </div>
 
-            <div className="form-group-row">
-              <div className="form-group">
-                <label>Utilisateur</label>
-                <select value={userId} onChange={(e) => setUserId(e.target.value)}>
-                  <option value="">Choisir un utilisateur</option>
-                  {users.map((user: any) => (
-                    <option key={user.id} value={user.id}>{user.email}</option>
-                  ))}
-                </select>
+        {submitted && (
+          <div className="border rounded-2xl p-4 md:p-6 bg-white shadow-sm">
+            <h2 className="text-xl font-semibold mb-2">Candidature soumise</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="space-y-1">
+                <div><span className="text-muted-foreground">Utilisateur:</span> {submitted.userEmail || '—'}</div>
+                <div><span className="text-muted-foreground">Élection:</span> {submitted.electionTitre || '—'}</div>
+                <div><span className="text-muted-foreground">Date de soumission:</span> {submitted.date || '—'}</div>
               </div>
-              <div className="form-group">
-                <label>Élection</label>
-                <select value={electionId} onChange={(e) => setElectionId(e.target.value)}>
-                  <option value="">Choisir une élection</option>
-                  {elections.map((election: any) => (
-                    <option key={election.id} value={election.id}>{election.titre}</option>
-                  ))}
-                </select>
+              <div className="space-y-1">
+                <div><span className="text-muted-foreground">Slogan:</span> {submitted.slogan || '—'}</div>
+                <div><span className="text-muted-foreground">Programme:</span> {submitted.programme || '—'}</div>
+                <div><span className="text-muted-foreground">Lettre:</span> {submitted.lettre || '—'}</div>
               </div>
-            </div>
-
-            <div className="form-group">
-              <label>Programme (fichier)</label>
-              <input type="file" onChange={(e) => setProgrammeFile(e.target.files?.[0] || null)} />
-            </div>
-
-            <div className="form-group">
-              <label>Slogan</label>
-              <input type="text" value={slogan} onChange={(e) => setSlogan(e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <label>Lettre de motivation (fichier)</label>
-              <input type="file" onChange={(e) => setLettreMotivationFile(e.target.files?.[0] || null)} />
-            </div>
-
-            <div className="form-group">
-              <label>Date de soumission</label>
-              <input type="date" value={dateSoumission} onChange={(e) => setDateSoumission(e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <button onClick={handleSubmit}>Soumettre la candidature</button>
             </div>
           </div>
-        </div>
+        )}
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Formulaire de candidature</DialogTitle>
+              <DialogDescription>Renseignez les informations et joignez vos documents.</DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Colonne gauche */}
+              <div className="space-y-4">
+                <div>
+                  <Label>Utilisateur</Label>
+                  <Select value={userId} onValueChange={setUserId}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choisir un utilisateur" /></SelectTrigger>
+                    <SelectContent>
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>{u.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Élection</Label>
+                  <Select value={electionId} onValueChange={setElectionId}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choisir une élection" /></SelectTrigger>
+                    <SelectContent>
+                      {elections.map((e) => (
+                        <SelectItem key={e.id} value={String(e.id)}>{e.titre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Date de soumission</Label>
+                  <Input type="date" value={dateSoumission} onChange={(e) => setDateSoumission(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Colonne droite */}
+              <div className="space-y-4">
+                <div>
+                  <Label>Programme (fichier)</Label>
+                  <input
+                    type="file"
+                    onChange={(e) => setProgrammeFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border file:border-gray-200 file:text-sm file:font-semibold file:bg-white hover:file:bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <Label>Lettre de motivation (fichier)</Label>
+                  <input
+                    type="file"
+                    onChange={(e) => setLettreMotivationFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border file:border-gray-200 file:text-sm file:font-semibold file:bg-white hover:file:bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <Label>Slogan</Label>
+                  <Input value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Votre slogan" />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
+              <Button onClick={handleSubmit}>
+                <Upload className="h-4 w-4 mr-2" />
+                Soumettre
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-      
-        <FooterElecteur />
-      
-
-      <style>
-        {`
-          .candidature-page {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-          }
-
-          .candidature-layout {
-            display: flex;
-            flex: 1;
-            background-color: #f8f9fa;
-          }
-
-          .candidature-main {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 3rem 1rem;
-          }
-
-          .candidature-form {
-            background: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
-            width: 100%;
-            max-width: 600px;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-            border-top: 4px solid #2196f3;
-          }
-
-          .candidature-title {
-            text-align: center;
-            color: #03a9f4;
-            font-size: 1.8rem;
-            font-weight: bold;
-          }
-
-          .form-group-row {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-          }
-
-          .form-group {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-          }
-
-          label {
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-          }
-
-          select,
-          input[type="text"],
-          input[type="file"],
-          input[type="date"],
-          button {
-            padding: 0.7rem;
-            border: 1px solid #03a9f4;
-            border-radius: 6px;
-            font-size: 1rem;
-          }
-
-          button {
-            background-color: #03a9f4;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.3s;
-          }
-
-          button:hover {
-            background-color: #0288d1;
-          }
-
-          .footer-container {
-            margin-left: 250px; /* décalage correspondant à SidebarElecteur */
-          }
-        `}
-      </style>
-    </div>
+    </AppShell>
   );
 };
 

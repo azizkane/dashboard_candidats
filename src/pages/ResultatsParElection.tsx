@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
 import { useLocation, useParams } from 'react-router-dom';
-import Appbar from '../components/AppbarElecteur';
-import SidebarElecteur from '../components/SidebarElecteur';
-import FooterElecteur from '../components/FooterElecteur';
+import AppShell from '@/components/common/AppShell';
+import {
+  fetchCandidatesByElection,
+  fetchVotesForCandidate,
+  getResultElectionImage,
+  getResultCandidateImage,
+  // No need for getStorageUrl here directly if getResultElectionImage/CandidateImage use it
+} from '../api';
 
 type Election = {
   id: number;
@@ -30,14 +34,10 @@ const ResultatsParElection: React.FC = () => {
   const [selectedElection, setSelectedElection] = useState<Election | null>(null);
 
   const [showResults, setShowResults] = useState(false);
-  const [live, setLive] = useState(true);
+  const [live, setLive] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
 
-  const token = useMemo(() => localStorage.getItem('auth_token') || '', []);
-  const defaultAvatar = '/user.png';
-  const defaultImage = '/default-election.jpg';
-
-  // Rafraîchissement à 1 minute
+  // Rafraîchissement à 60s pour éviter le clignotement
   const REFRESH_MS = 60000;
   const liveTimerRef = useRef<number | null>(null);
 
@@ -55,11 +55,7 @@ const ResultatsParElection: React.FC = () => {
   }, [params.electionId, queryId, storedId, fallbackId]);
 
   /* ========= HELPERS ========= */
-  const API_BASE = useMemo(() => {
-    const proto = window?.location?.protocol || 'http:';
-    const host = window?.location?.hostname || '127.0.0.1';
-    return `${proto}//${host}:8000`;
-  }, []);
+  // Removed local API_BASE and storageUrl definitions as they are now in api.ts
 
   const setUpdatedNow = () => {
     const d = new Date();
@@ -68,16 +64,8 @@ const ResultatsParElection: React.FC = () => {
     );
   };
 
-  const storageUrl = (p?: string | null) => {
-    if (!p) return null;
-    if (/^https?:\/\//i.test(p)) return p;
-    const clean = String(p).replace(/^\/+/, '');
-    const withStorage = clean.startsWith('storage/') ? clean : `storage/${clean}`;
-    return `${API_BASE}/${withStorage}`;
-  };
-
-  const getElectionImage = (e: Election) => e?.image_url || storageUrl(e?.image) || defaultImage;
-  const getCandidatImage = (profil?: string | null) => storageUrl(profil) || defaultAvatar;
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
   const statusLabel = useMemo(() => {
     if (!selectedElection?.date_debut || !selectedElection?.date_fin) return '';
@@ -119,32 +107,24 @@ const ResultatsParElection: React.FC = () => {
   const fetchCandidats = useCallback(async () => {
     if (!selectedElection) return;
     try {
-      const res = await axios.get(`${API_BASE}/api/candidats_par_election/${selectedElection.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const list: Candidat[] = res.data?.data || [];
+      const list: Candidat[] = await fetchCandidatesByElection(String(selectedElection.id));
       setCandidats(list);
       setUpdatedNow();
     } catch (err) {
       console.error('Erreur chargement candidats', err);
     }
-  }, [API_BASE, selectedElection, token]);
+  }, [selectedElection]);
 
-  // /api/votes/{election_id}/{candidat_id}
   const getVotesForCandidate = useCallback(
     async (electionId: number, candidatId: number) => {
       try {
-        const { data } = await axios.get(`${API_BASE}/api/votes/${electionId}/${candidatId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { _t: Date.now() }
-        });
-        return Number(data?.votes ?? data?.total ?? data?.count ?? data?.data?.votes ?? 0);
+        return await fetchVotesForCandidate(electionId, candidatId);
       } catch (e) {
         console.error('Erreur getVotesForCandidate:', e);
         return 0;
       }
     },
-    [API_BASE, token]
+    []
   );
 
   const fetchVotesCounts = useCallback(async () => {
@@ -154,9 +134,11 @@ const ResultatsParElection: React.FC = () => {
       const counts = await Promise.all(
         candidats.map(c => getVotesForCandidate(selectedElection.id, c.id))
       );
-      setCandidats(prev =>
-        prev.map((c, idx) => ({ ...c, votes_count: counts[idx] ?? Number(c.votes_count || 0) }))
-      );
+      setCandidats(prev => {
+        const next = prev.map((c, idx) => ({ ...c, votes_count: counts[idx] ?? Number(c.votes_count || 0) }));
+        const changed = next.some((c, i) => Number(c.votes_count || 0) !== Number(prev[i]?.votes_count || 0));
+        return changed ? next : prev;
+      });
       setUpdatedNow();
     } catch (err) {
       console.error('Erreur chargement votes par candidat (unitaire)', err);
@@ -165,6 +147,7 @@ const ResultatsParElection: React.FC = () => {
 
   const fetchNow = useCallback(async () => {
     await fetchCandidats();
+    // Pour éviter le flash 0→%, enchaîne immédiatement un chargement de votes
     await fetchVotesCounts();
   }, [fetchCandidats, fetchVotesCounts]);
 
@@ -176,21 +159,30 @@ const ResultatsParElection: React.FC = () => {
     }
   }, []);
 
-  const startLive = useCallback(async () => {
-    stopLive();
-    await fetchNow(); // premier fetch complet
-    liveTimerRef.current = window.setInterval(fetchVotesCounts, REFRESH_MS);
-  }, [stopLive, fetchNow, fetchVotesCounts]);
-
   useEffect(() => {
-    if (!showResults) {
-      stopLive();
-      return;
+    if (showResults && selectedElection) {
+      (async () => {
+        await fetchNow();
+      })();
     }
-    if (live) startLive();
-    else stopLive();
-    return () => stopLive();
-  }, [showResults, live, startLive, stopLive]);
+    if (showResults && live && !liveTimerRef.current) {
+      liveTimerRef.current = window.setInterval(() => {
+        fetchVotesCounts();
+      }, REFRESH_MS);
+    }
+    if (!showResults || !live) {
+      if (liveTimerRef.current) {
+        window.clearInterval(liveTimerRef.current);
+        liveTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (liveTimerRef.current) {
+        window.clearInterval(liveTimerRef.current);
+        liveTimerRef.current = null;
+      }
+    };
+  }, [showResults, live, selectedElection]);
 
   /* ========= LIFECYCLE ========= */
   // Initialise directement l'élection sélectionnée sans charger la liste
@@ -214,19 +206,21 @@ const ResultatsParElection: React.FC = () => {
   /* ========= RENDER ========= */
   return (
     <div className="page">
-      <Appbar title="Résultats par Élection" />
-      <div className="layout">
-        <SidebarElecteur />
-        <main className="main">
-          <h2 className="title">Résultats par Élection</h2>
+      <AppShell role="electeur" title="Résultats par Élection">
+        <main className="main" aria-hidden={showResults}>
+          {!showResults && (
+            <h2 className="title">Résultats par Élection</h2>
+          )}
 
+          {/* Cartes d'élections (removed as this page is for a single election's results) */}
+          {/* Only display the modal for the selected election */}
           {showResults && selectedElection && (
             <div className="modal-overlay" role="dialog" aria-modal="true">
               <div className="results-dialog" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="dialog-header">
                   <h3 className="dialog-title">
-                    {`Résultats — ${selectedElection.titre}`}
+                    {`Résultats — Élection #${selectedElection.id}`}
                   </h3>
                   <button className="close-btn" onClick={closeResults} aria-label="Fermer">×</button>
                 </div>
@@ -249,6 +243,10 @@ const ResultatsParElection: React.FC = () => {
                   </div>
 
                   <div className="controls">
+                    <button className="btn btn-light" onClick={fetchNow} disabled={!selectedElection}>
+                      <i className="pi pi-refresh" style={{ marginRight: 6 }} />
+                      Rafraîchir maintenant
+                    </button>
                     <div className="live-toggle">
                       <label className="switch">
                         <input
@@ -260,17 +258,13 @@ const ResultatsParElection: React.FC = () => {
                       </label>
                       <span className={`live-label ${live ? 'on' : ''}`}>Live</span>
                     </div>
-                    <button className="btn btn-light" onClick={fetchNow}>
-                      <i className="pi pi-refresh" style={{ marginRight: 6 }} />
-                      Rafraîchir
-                    </button>
                   </div>
                 </div>
 
                 {/* Leader */}
                 {leader && (
                   <div className="leader-card">
-                    <img src={getCandidatImage(leader.profil)} className="leader-avatar" alt="leader" />
+                    <img src={getResultCandidateImage(leader.profil)} className="leader-avatar" alt="leader" />
                     <div className="leader-info">
                       <div className="leader-top">
                         <span className="badge">En tête</span>
@@ -295,7 +289,7 @@ const ResultatsParElection: React.FC = () => {
                     <div key={c.id} className={`rank-row ${idx === 0 ? 'first' : ''}`}>
                       <div className="left">
                         <span className="pos">#{idx + 1}</span>
-                        <img src={getCandidatImage(c.profil)} className="avatar" alt="" />
+                        <img src={getResultCandidateImage(c.profil)} className="avatar" alt="" />
                         <div className="id">
                           <div className="name">{c.prenom} {c.nom}</div>
                           <div className="email">{c.email}</div>
@@ -324,19 +318,16 @@ const ResultatsParElection: React.FC = () => {
             </div>
           )}
         </main>
-      </div>
-
-      {/* Footer fixé en bas */}
-      <div style={{ position: 'fixed', bottom: 0, width: '100%' }}>
-        <FooterElecteur />
-      </div>
+      </AppShell>
 
       {/* ========= STYLES ========= */}
       <style>{`
         .page { display: flex; flex-direction: column; min-height: 100vh; background: #f5f7fb; }
         .layout { display: flex; flex: 1; }
-        .main { flex: 1; padding: 1.2rem; margin-left: 250px; }
+        .main { flex: 1; padding: 1.2rem; }
         .title { font-size: 1.6rem; color: #1e3a8a; margin: 1rem 0; }
+
+        /* Removed .cards and .election-card styles as they are not needed on this page */
 
         .modal-overlay {
           position: fixed; inset: 0;

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import LoginTemplate from '@/components/Logintemplate';
-import axios from 'axios';
+import { loginElector } from '@/api';
 import { useNavigate } from 'react-router-dom';
 
 const LoginElecteur = () => {
@@ -12,13 +12,13 @@ const LoginElecteur = () => {
     setErrorMessage('');
     setLoading(true);
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/login-electeur', {
-        email,
-        password,
-      });
-      localStorage.setItem('auth_token', response.data.token);
+      const data = await loginElector(email, password);
+      const token: string = data?.token ?? '';
+      if (!token) throw new Error('Token manquant');
+      localStorage.setItem('auth_token', token);
+      sessionStorage.setItem('auth_token', token);
       navigate('/dashbord-electeur');
-    } catch {
+    } catch (e) {
       setErrorMessage('Email ou mot de passe incorrect');
     } finally {
       setLoading(false);

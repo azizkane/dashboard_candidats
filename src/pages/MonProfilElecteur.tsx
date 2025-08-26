@@ -1,237 +1,259 @@
-import { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Pencil } from 'lucide-react';
-import SidebarElecteur from '@/components/SidebarElecteur';
-import AppBar from '@/components/AppbarElecteur';
-import FooterElecteur from '@/components/FooterElecteur';
+import React, { useEffect, useState } from 'react';
+import AppShell from '@/components/common/AppShell';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { fetchUserProfile, updateUserProfile, getProfileAvatarUrl } from '../api';
 
-interface UserData {
+interface UserProfile {
   id: number;
   nom: string;
   prenom: string;
   email: string;
-  role: string;
-  profil?: string | null;
+  telephone?: string;
+  adresse?: string;
+  date_naissance?: string;
+  profil?: string;
+  niveau?: string;
 }
 
-const Layout = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex flex-col min-h-screen bg-gray-50">
-    <div className="flex flex-1">
-      <SidebarElecteur />
-      <div className="flex flex-col flex-1">
-        <AppBar title="Espace Électeur" />
-        <main className="flex-1 p-6">{children}</main>
-      </div>
-    </div>
-    <FooterElecteur />
-  </div>
-);
-
-// Skeleton simple (optionnel)
-const Skel = ({ className = '' }: { className?: string }) => (
-  <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
-);
-
 const MonProfilElecteur = () => {
-  // 1) Rendu instantané depuis le cache
-  const cached = (() => {
-    try { return JSON.parse(localStorage.getItem('me') || 'null') as UserData | null; }
-    catch { return null; }
-  })();
-
-  const [user, setUser] = useState<UserData | null>(cached);
-  const [editMode, setEditMode] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [avatarVersion, setAvatarVersion] = useState<number>(0);
-  const [formData, setFormData] = useState<UserData>(
-    cached ?? { id: 0, nom: '', prenom: '', email: '', role: '', profil: '' }
-  );
+  const [formData, setFormData] = useState<Partial<UserProfile>>({});
 
-  // 2) Rafraîchissement silencieux depuis l’API (sans écran "Chargement...")
   useEffect(() => {
-    const token = localStorage.getItem('auth_token');
-    if (!token) return;
-
-    axios.get('http://127.0.0.1:8000/api/user', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    .then((res) => {
-      const fresh = res.data as UserData;
-      setUser(fresh);
-      setFormData(fresh);
-      localStorage.setItem('me', JSON.stringify(fresh));
-    })
-    .catch(() => {
-      // on garde le cache si l’appel échoue
-    });
+    loadProfile();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchUserProfile();
+      setProfile(data);
+      setFormData(data);
+    } catch (error) {
+      console.error('Erreur lors du chargement du profil:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 3) Sauvegarde avec UI optimiste (affichage immédiat des modifs)
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = localStorage.getItem('auth_token');
-    if (!token || !formData.id) return;
-
-    setSaving(true);
-    const prev = user;
-
-    // UI optimiste: on affiche tout de suite les nouvelles valeurs
-    setUser(formData);
-    localStorage.setItem('me', JSON.stringify(formData));
-
-    axios.put(`http://127.0.0.1:8000/api/users/${formData.id}`, formData, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    })
-    .then((res) => {
-      // Gère {user: {...}} ou {data: {...}} ou {...}
-      const updated =
-        (res.data && (res.data.user || res.data.data)) ? (res.data.user || res.data.data) :
-        (typeof res.data === 'object' ? res.data : formData);
-
-      setUser(updated);
-      setFormData(updated);
-      localStorage.setItem('me', JSON.stringify(updated));
-      setEditMode(false);
-
-      // Si la photo a changé, on "buste" le cache une seule fois
-      setAvatarVersion(Date.now());
-    })
-    .catch((err) => {
-      // rollback si échec
-      if (prev) {
-        setUser(prev);
-        setFormData(prev);
-        localStorage.setItem('me', JSON.stringify(prev));
-      }
-      console.error('Erreur de modification :', err?.response?.data || err);
-    })
-    .finally(() => setSaving(false));
+  const handleSave = async () => {
+    if (!profile) return;
+    
+    try {
+      setSaving(true);
+      await updateUserProfile(profile.id, formData);
+      setProfile({ ...profile, ...formData });
+      setEditing(false);
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // 4) Avatar avec anti-cache déclenché après update
-  const avatar = user?.profil
-    ? `http://127.0.0.1:8000/storage/${user.profil}${avatarVersion ? `?v=${avatarVersion}` : ''}`
-    : '';
+  const handleCancel = () => {
+    setFormData(profile || {});
+    setEditing(false);
+  };
+
+  if (loading) {
+    return (
+      <AppShell role="electeur" title="Mon Profil">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">Chargement du profil...</div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <AppShell role="electeur" title="Mon Profil">
+        <div className="text-center text-red-600">Erreur lors du chargement du profil</div>
+      </AppShell>
+    );
+  }
 
   return (
-    <Layout>
-      <div className="max-w-3xl mx-auto bg-white mt-20 p-8 rounded-xl shadow-md border border-gray-200">
-        {!editMode ? (
-          <div className="text-center">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-blue-600">Mon Profil</h2>
-              <button
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
-                onClick={() => { if (user) setFormData(user); setEditMode(true); }}
-              >
-                <Pencil size={18} />
-                Modifier
-              </button>
-            </div>
+    <AppShell role="electeur" title="Mon Profil">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Mon Profil Électeur</h1>
+          {!editing && (
+            <Button onClick={() => setEditing(true)} variant="democratic">
+              Modifier le profil
+            </Button>
+          )}
+        </div>
 
-            <div className="flex flex-col items-center gap-3 mt-6">
-              {avatar ? (
-                <img
-                  src={avatar}
-                  alt="avatar"
-                  className="w-28 h-28 rounded-full object-cover border shadow"
-                />
-              ) : (
-                <Skel className="w-28 h-28 rounded-full" />
+        {/* Photo de profil et niveau */}
+        <div className="bg-white rounded-2xl shadow-sm border p-6 mb-6">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="relative">
+              <img
+                src={profile.profil ? getProfileAvatarUrl(profile.profil) : '/user.png'}
+                alt="Photo de profil"
+                className="w-24 h-24 rounded-full object-cover border-4 border-gray-100 shadow-lg"
+              />
+              {editing && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full p-0"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </Button>
               )}
-
-              <p className="mt-2">
-                <strong>Nom :</strong>{' '}
-                {user?.nom ? user.nom : <Skel className="inline-block align-middle w-24 h-4" />}
-              </p>
-              <p>
-                <strong>Prénom :</strong>{' '}
-                {user?.prenom ? user.prenom : <Skel className="inline-block align-middle w-28 h-4" />}
-              </p>
-              <p>
-                <strong>Email :</strong>{' '}
-                {user?.email ? user.email : <Skel className="inline-block align-middle w-40 h-4" />}
-              </p>
-              <p>
-                <strong>Rôle :</strong>{' '}
-                {user?.role ? user.role : <Skel className="inline-block align-middle w-20 h-4" />}
-              </p>
+            </div>
+            <div className="text-center md:text-left">
+              <h2 className="text-2xl font-bold text-foreground">
+                {profile.prenom} {profile.nom}
+              </h2>
+              {profile.niveau && (
+                <div className="mt-2">
+                  <Badge variant="secondary" className="text-sm">
+                    Niveau : {profile.niveau}
+                  </Badge>
+                </div>
+              )}
+              <p className="text-muted-foreground mt-1">{profile.email}</p>
             </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <h2 className="text-2xl font-bold text-blue-600 mb-4">Modifier mon profil</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Informations personnelles */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Informations personnelles</h3>
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700">Nom</label>
-                <input
-                  type="text"
-                  name="nom"
-                  value={formData.nom}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                  required
-                />
+                <Label>Prénom</Label>
+                {editing ? (
+                  <Input
+                    value={formData.prenom || ''}
+                    onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">{profile.prenom}</p>
+                )}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700">Prénom</label>
-                <input
-                  type="text"
-                  name="prenom"
-                  value={formData.prenom}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                  required
-                />
+                <Label>Nom</Label>
+                {editing ? (
+                  <Input
+                    value={formData.nom || ''}
+                    onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">{profile.nom}</p>
+                )}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                  required
-                />
+                <Label>Email</Label>
+                {editing ? (
+                  <Input
+                    type="email"
+                    value={formData.email || ''}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">{profile.email}</p>
+                )}
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700">Rôle</label>
-                <input
-                  type="text"
-                  name="role"
-                  value={formData.role}
-                  readOnly
-                  className="w-full border bg-gray-100 border-gray-300 rounded px-3 py-2"
-                />
+                <Label>Téléphone</Label>
+                {editing ? (
+                  <Input
+                    value={formData.telephone || ''}
+                    onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+                    className="mt-1"
+                    placeholder="+33 6 12 34 56 78"
+                  />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">{profile.telephone || 'Non renseigné'}</p>
+                )}
               </div>
             </div>
 
-            <div className="flex justify-end gap-4">
-              <button
-                type="button"
-                onClick={() => setEditMode(false)}
-                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                disabled={saving}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
-                disabled={saving}
-              >
-                {saving ? 'Enregistrement…' : 'Enregistrer'}
-              </button>
+            {/* Informations complémentaires */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-foreground border-b pb-2">Informations complémentaires</h3>
+              
+              <div>
+                <Label>Date de naissance</Label>
+                {editing ? (
+                  <Input
+                    type="date"
+                    value={formData.date_naissance || ''}
+                    onChange={(e) => setFormData({ ...formData, date_naissance: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {profile.date_naissance ? new Date(profile.date_naissance).toLocaleDateString('fr-FR') : 'Non renseignée'}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label>Adresse</Label>
+                {editing ? (
+                  <Input
+                    value={formData.adresse || ''}
+                    onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                    className="mt-1"
+                    placeholder="123 Rue de la République, 75001 Paris"
+                  />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">{profile.adresse || 'Non renseignée'}</p>
+                )}
+              </div>
+
+              <div>
+                <Label>Niveau</Label>
+                {editing ? (
+                  <Input
+                    value={formData.niveau || ''}
+                    onChange={(e) => setFormData({ ...formData, niveau: e.target.value })}
+                    className="mt-1"
+                    placeholder="Débutant, Intermédiaire, Avancé..."
+                  />
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">{profile.niveau || 'Non renseigné'}</p>
+                )}
+              </div>
             </div>
-          </form>
-        )}
+          </div>
+
+          {/* Actions */}
+          {editing && (
+            <div className="flex justify-end gap-3 pt-6 border-t">
+              <Button variant="outline" onClick={handleCancel}>
+                Annuler
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
-    </Layout>
+    </AppShell>
   );
 };
 

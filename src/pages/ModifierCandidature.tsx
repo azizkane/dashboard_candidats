@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
-import SidebarCandidat from '@/components/SidebarCandidat';
-import Appbar from '@/components/AppbarCandidat';
-import FooterCandidat from '@/components/FooterCandidat';
+import AppShell from '@/components/common/AppShell';
+import {
+  fetchCandidatureById,
+  updateCandidature
+} from '../api';
 
 const ModifierCandidature = () => {
   const { id } = useParams();
@@ -14,27 +15,23 @@ const ModifierCandidature = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const fetchCandidature = async () => {
+    const getCandidature = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
-        const res = await axios.get(`http://localhost:8000/api/candidature/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const data = res.data.data;
-        setSlogan(data.slogan || '');
+        if (id) {
+          const data = await fetchCandidatureById(id);
+          setSlogan(data.slogan || '');
+        }
       } catch (err) {
         console.error('Erreur chargement candidature', err);
       }
     };
 
-    fetchCandidature();
+    getCandidature();
   }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const token = localStorage.getItem('auth_token');
 
     const formData = new FormData();
     formData.append('slogan', slogan);
@@ -42,29 +39,22 @@ const ModifierCandidature = () => {
     if (lettreMotivation) formData.append('lettre_motivation', lettreMotivation);
 
     try {
-      await axios.post(`http://localhost:8000/api/modifier_candidature/${id}`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      alert('✅ Candidature mise à jour avec succès !');
-      navigate('/candidat/ma_candidature');
-    } catch (err) {
+      if (id) {
+        await updateCandidature(id, formData);
+        alert('✅ Candidature mise à jour avec succès !');
+        navigate('/candidat/ma_candidature');
+      }
+    } catch (err: any) {
       console.error('Erreur modification', err);
-      alert('❌ Une erreur est survenue lors de la modification.');
+      alert(`❌ Une erreur est survenue lors de la modification: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <SidebarCandidat />
-      <div className="flex-1 flex flex-col">
-        <Appbar title="Modifier Candidature" />
-        <main className="flex-1 flex items-center justify-center py-10 px-4">
+    <AppShell role="candidat" title="Modifier Candidature">
+      <div className="flex items-center justify-center py-4 px-4">
           <form
             onSubmit={handleSubmit}
             className="w-full max-w-xl bg-white p-6 md:p-8 rounded-2xl shadow-lg space-y-6"
@@ -118,10 +108,8 @@ const ModifierCandidature = () => {
               </button>
             </div>
           </form>
-        </main>
-        <FooterCandidat />
       </div>
-    </div>
+    </AppShell>
   );
 };
 

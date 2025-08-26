@@ -8,8 +8,10 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 210 40% 8%;
+    /* Custom palette based on user's hex colors converted to HSL */
+    /* White #ffffff */
+    --background: 0 0% 100%;
+    --foreground: 191 60% 4%; /* approximate for #040f0f */
 
     --card: 0 0% 100%;
     --card-foreground: 210 40% 8%;
@@ -17,16 +19,18 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 210 40% 8%;
 
-    --primary: 217 91% 60%;
+    /* Denim #275dad */
+    --primary: 214 63% 42%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 210 40% 8%;
+    /* Light sea green #07beb8 */
+    --secondary: 177 93% 39%;
+    --secondary-foreground: 191 60% 4%;
 
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 142 76% 36%;
+    --accent: 177 93% 39%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -34,38 +38,31 @@ All colors MUST be HSL.
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --ring: 214 63% 42%;
     
     /* Custom election theme colors */
-    --democratic: 217 91% 60%;
+    --democratic: 214 63% 42%;
     --democratic-foreground: 0 0% 100%;
-    --success: 142 76% 36%;
+    --success: 177 93% 39%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
     
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 70%));
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 46%));
-    --gradient-hero: linear-gradient(135deg, hsl(217 91% 60%), hsl(142 76% 36%));
+    --gradient-primary: linear-gradient(135deg, hsl(214 63% 42%), hsl(214 63% 52%));
+    --gradient-success: linear-gradient(135deg, hsl(177 93% 39%), hsl(177 93% 49%));
+    --gradient-hero: linear-gradient(135deg, hsl(214 63% 42%), hsl(177 93% 39%));
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 191 60% 4%;
+    --sidebar-primary: 214 63% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 32% 95%;
+    --sidebar-accent-foreground: 191 60% 4%;
+    --sidebar-border: 214 32% 90%;
+    --sidebar-ring: 214 63% 42%;
   }
 
   .dark {
