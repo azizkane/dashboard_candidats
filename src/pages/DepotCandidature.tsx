@@ -5,24 +5,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { fetchUsers, fetchElections, submitCandidature } from '../api';
+import { fetchElections, submitCandidature, fetchCurrentUser } from '../api';
 import { Upload } from 'lucide-react';
 
-interface UserOption { id: number; email: string }
 interface ElectionOption { id: number; titre: string }
+interface Me { id: number; nom: string; prenom: string; email: string }
 
 const DepotCandidature = () => {
-  const [users, setUsers] = useState<UserOption[]>([]);
   const [elections, setElections] = useState<ElectionOption[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
 
-  const [userId, setUserId] = useState('');
+  // gérés par le back : user_id & date_soumission
   const [electionId, setElectionId] = useState('');
   const [programmeFile, setProgrammeFile] = useState<File | null>(null);
   const [lettreMotivationFile, setLettreMotivationFile] = useState<File | null>(null);
   const [slogan, setSlogan] = useState('');
-  const [dateSoumission, setDateSoumission] = useState('');
+
   const [submitted, setSubmitted] = useState<null | {
-    userEmail: string;
+    userEmail: string; // on y met "Prénom Nom" pour ne pas toucher à ton JSX
     electionTitre: string;
     date: string;
     slogan: string;
@@ -30,65 +30,93 @@ const DepotCandidature = () => {
     lettre?: string;
   }>(null);
 
-  const fetchData = async () => {
-    try {
-      const [usersData, electionsData] = await Promise.all([
-        fetchUsers(),
+  useEffect(() => {
+    (async () => {
+      const [elecRes, meRes] = await Promise.allSettled([
         fetchElections(),
+        fetchCurrentUser(),
       ]);
-      setUsers(usersData as UserOption[]);
-      setElections(electionsData as ElectionOption[]);
-    } catch (error) {
-      console.error('Erreur de chargement des données :', error);
+
+      if (elecRes.status === 'fulfilled') setElections(elecRes.value as ElectionOption[]);
+      else {
+        console.error('Erreur de chargement des élections :', elecRes.reason);
+        setElections([]);
+      }
+
+      if (meRes.status === 'fulfilled') setMe(meRes.value as Me);
+      else console.warn('Profil non disponible :', meRes.reason);
+    })();
+  }, []);
+
+  // Si le profil arrive après la soumission, on met à jour l’affichage du nom
+  useEffect(() => {
+    if (submitted && me && (!submitted.userEmail || submitted.userEmail === '—')) {
+      setSubmitted(s => s ? { ...s, userEmail: `${me.prenom} ${me.nom}` } : s);
     }
-  };
+  }, [me, submitted]);
+
+  const [open, setOpen] = useState(false);
 
   const handleSubmit = async () => {
-    // Validation des champs requis
-    if (!userId || !electionId || !dateSoumission || !slogan) {
-      alert('Veuillez remplir tous les champs obligatoires (Utilisateur, Élection, Date de soumission, Slogan)');
+    // Validation minimale (back gère user/date)
+    if (!electionId || !slogan) {
+      alert('Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+    // programme est requis côté back et limité à 2 Mo
+    if (!programmeFile) {
+      alert('Le fichier "Programme" est obligatoire.');
+      return;
+    }
+    if (programmeFile.size > 2 * 1024 * 1024) {
+      alert('Le fichier "Programme" dépasse 2 Mo.');
+      return;
+    }
+    if (lettreMotivationFile && lettreMotivationFile.size > 2 * 1024 * 1024) {
+      alert('La "Lettre de motivation" dépasse 2 Mo.');
       return;
     }
 
     const formData = new FormData();
-
-    formData.append('user_id', userId);
     formData.append('election_id', electionId);
-    if (programmeFile) formData.append('programme', programmeFile);
+    formData.append('programme', programmeFile);
     if (lettreMotivationFile) formData.append('lettre_motivation', lettreMotivationFile);
     formData.append('slogan', slogan);
-    formData.append('date_soumission', new Date(dateSoumission).toISOString().split('T')[0]);
 
     try {
       await submitCandidature(formData);
       alert('Candidature soumise avec succès !');
-      const selectedUser = users.find(u => String(u.id) === userId);
+
       const selectedElection = elections.find(e => String(e.id) === electionId);
       setSubmitted({
-        userEmail: selectedUser?.email ?? '',
+        userEmail: me ? `${me.prenom} ${me.nom}` : '—', // ← affiche Prénom Nom
         electionTitre: selectedElection?.titre ?? '',
-        date: dateSoumission,
+        // Date indicative ; la vraie vient du serveur
+        date: new Date().toISOString().split('T')[0],
         slogan,
         programme: programmeFile?.name,
         lettre: lettreMotivationFile?.name,
       });
-      setUserId('');
+
+      // reset
       setElectionId('');
       setProgrammeFile(null);
       setLettreMotivationFile(null);
       setSlogan('');
-      setDateSoumission('');
       setOpen(false);
-    } catch (err) {
-      alert('Erreur lors de la soumission.');
+    } catch (err: any) {
+      // Essaye de lire les erreurs Laravel si 422
+      if (err?.status === 422 && err?.errors) {
+        const lines = Object.entries(err.errors).map(([f, msgs]: any) =>
+          `${f}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`
+        );
+        alert(lines.join('\n') || 'Erreur de validation (422).');
+      } else {
+        alert(err?.message || 'Erreur lors de la soumission.');
+      }
+      console.error('Soumission KO:', err);
     }
   };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const [open, setOpen] = useState(false);
 
   return (
     <AppShell role="electeur" title="Espace Électeur">
@@ -124,35 +152,22 @@ const DepotCandidature = () => {
             </DialogHeader>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Colonne gauche */}
+              {/* Colonne gauche : (utilisateur & date gérés par le back) */}
               <div className="space-y-4">
-                <div>
-                  <Label>Utilisateur</Label>
-                  <Select value={userId} onValueChange={setUserId}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choisir un utilisateur" /></SelectTrigger>
-                    <SelectContent>
-                      {users.map((u) => (
-                        <SelectItem key={u.id} value={String(u.id)}>{u.email}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 <div>
                   <Label>Élection</Label>
                   <Select value={electionId} onValueChange={setElectionId}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Choisir une élection" /></SelectTrigger>
                     <SelectContent>
-                      {elections.map((e) => (
-                        <SelectItem key={e.id} value={String(e.id)}>{e.titre}</SelectItem>
-                      ))}
+                      {elections.length > 0 ? (
+                        elections.map((e) => (
+                          <SelectItem key={e.id} value={String(e.id)}>{e.titre}</SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="__none" disabled>Aucune élection disponible</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div>
-                  <Label>Date de soumission</Label>
-                  <Input type="date" value={dateSoumission} onChange={(e) => setDateSoumission(e.target.value)} />
                 </div>
               </div>
 

@@ -32,16 +32,8 @@ const LoginTemplate: React.FC<LoginTemplateProps> = ({
         <p className="text-lg mb-8 text-center max-w-sm">
           Votre plateforme sécurisée pour participer aux élections démocratiques en ligne
         </p>
-        <div className="flex gap-8 text-center">
-          <div>
-            <div className="text-2xl font-semibold">100%</div>
-            <div className="text-sm">Sécurisé</div>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold">24/7</div>
-            <div className="text-sm">Disponible</div>
-          </div>
-        </div>
+       
+       
       </div>
 
       {/* RIGHT SIDE */}

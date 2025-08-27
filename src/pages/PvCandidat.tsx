@@ -55,7 +55,7 @@ const PvCandidat = () => {
     return (
       <AppShell role="candidat" title="Procès-verbaux">
         <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Chargement des procès-verbaux...</div>
+          <div className="text-gray-600"></div>
         </div>
       </AppShell>
     );

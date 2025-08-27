@@ -66,7 +66,7 @@ const MonProfilCandidat = () => {
     return (
       <AppShell role="candidat" title="Mon Profil">
         <div className="flex items-center justify-center h-64">
-          <div className="text-gray-600">Chargement du profil...</div>
+          <div className="text-gray-600"></div>
         </div>
       </AppShell>
     );

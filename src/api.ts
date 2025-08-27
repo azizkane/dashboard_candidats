@@ -1,8 +1,8 @@
 // =============================
 // API base configuration
 // =============================
-const API_BASE_URL = "https://b6427bc52a01.ngrok-free.app/api";
-const STORAGE_BASE_URL = "https://b6427bc52a01.ngrok-free.app/storage";
+const API_BASE_URL = "http://localhost:8000/api";
+const STORAGE_BASE_URL = "http://localhost:8000/storage";
 
 const commonHeaders = {
   "ngrok-skip-browser-warning": "true",
@@ -578,16 +578,21 @@ export const fetchCurrentUser = async () => {
     const response = await fetch(`${API_BASE_URL}/user`, {
       method: "GET",
       headers: getAuthHeaders(),
+      // credentials: "include", // décommente si tu utilises Sanctum en cookies plutôt que Bearer
     });
     if (!response.ok) {
-      throw new Error(`Error: ${response.status}`);
+      const txt = await response.text().catch(() => "");
+      throw new Error(`Error: ${response.status} ${txt}`);
     }
-    return await response.json();
+    return await response.json(); // doit contenir { id, nom, prenom, email, ... }
   } catch (error) {
-    console.error("Erreur de chargement de l'utilisateur actuel:", error);
+    console.error("Erreur de chargement de l'utilisateur actuel:", error); // c'est bon comme ça
     throw error;
   }
 };
+
+
+
 
 export const loginCandidate = async (email: string, password: string) => {
   try {
