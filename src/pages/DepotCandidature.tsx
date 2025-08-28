@@ -155,7 +155,7 @@ const DepotCandidature = () => {
               {/* Colonne gauche : (utilisateur & date gérés par le back) */}
               <div className="space-y-4">
                 <div>
-                  <Label>Élection</Label>
+                  <Label>Élection *</Label>
                   <Select value={electionId} onValueChange={setElectionId}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Choisir une élection" /></SelectTrigger>
                     <SelectContent>
@@ -174,25 +174,33 @@ const DepotCandidature = () => {
               {/* Colonne droite */}
               <div className="space-y-4">
                 <div>
-                  <Label>Programme (fichier)</Label>
+                  <Label>Programme (fichier) *</Label>
                   <input
                     type="file"
+                    accept=".pdf,.doc,.docx,.txt"
                     onChange={(e) => setProgrammeFile(e.target.files?.[0] || null)}
                     className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border file:border-gray-200 file:text-sm file:font-semibold file:bg-white hover:file:bg-gray-50"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Formats acceptés : PDF, DOC, DOCX, TXT (max 2 Mo)
+                  </p>
                 </div>
 
                 <div>
                   <Label>Lettre de motivation (fichier)</Label>
                   <input
                     type="file"
+                    accept=".pdf,.doc,.docx,.txt"
                     onChange={(e) => setLettreMotivationFile(e.target.files?.[0] || null)}
                     className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border file:border-gray-200 file:text-sm file:font-semibold file:bg-white hover:file:bg-gray-50"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Formats acceptés : PDF, DOC, DOCX, TXT (max 2 Mo) - Optionnel
+                  </p>
                 </div>
 
                 <div>
-                  <Label>Slogan</Label>
+                  <Label>Slogan *</Label>
                   <Input value={slogan} onChange={(e) => setSlogan(e.target.value)} placeholder="Votre slogan" />
                 </div>
               </div>

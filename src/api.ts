@@ -1,8 +1,8 @@
 // =============================
 // API base configuration
 // =============================
-const API_BASE_URL = "http://localhost:8000/api";
-const STORAGE_BASE_URL = "http://localhost:8000/storage";
+const API_BASE_URL = "https://5a1d38016feb.ngrok-free.app/api";
+const STORAGE_BASE_URL = "https://5a1d38016feb.ngrok-free.app/storage";
 
 const commonHeaders = {
   "ngrok-skip-browser-warning": "true",

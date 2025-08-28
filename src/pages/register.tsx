@@ -114,6 +114,7 @@ const RegisterElecteur = () => {
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
               <input
                 type="text"
                 placeholder="Nom"
@@ -124,6 +125,7 @@ const RegisterElecteur = () => {
               {errors.nom && <p className="text-red-600 text-xs mt-1">{errors.nom[0]}</p>}
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Prénom *</label>
               <input
                 type="text"
                 placeholder="Prénom"
@@ -136,6 +138,7 @@ const RegisterElecteur = () => {
           </div>
 
           <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
             <input
               type="email"
               placeholder="Email"

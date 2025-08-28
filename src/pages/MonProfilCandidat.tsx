@@ -136,7 +136,7 @@ const MonProfilCandidat = () => {
               <h3 className="text-lg font-semibold text-foreground border-b pb-2">Informations personnelles</h3>
               
               <div>
-                <Label>Prénom</Label>
+                <Label>Prénom *</Label>
                 {editing ? (
                   <Input
                     value={formData.prenom || ''}
@@ -149,7 +149,7 @@ const MonProfilCandidat = () => {
               </div>
 
               <div>
-                <Label>Nom</Label>
+                <Label>Nom *</Label>
                 {editing ? (
                   <Input
                     value={formData.nom || ''}
@@ -162,7 +162,7 @@ const MonProfilCandidat = () => {
               </div>
 
               <div>
-                <Label>Email</Label>
+                <Label>Email *</Label>
                 {editing ? (
                   <Input
                     type="email"

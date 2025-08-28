@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/common/AppShell';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Save, FileText, Edit3 } from 'lucide-react';
 import {
   fetchCandidatureById,
   updateCandidature
@@ -13,12 +19,14 @@ const ModifierCandidature = () => {
   const [programme, setProgramme] = useState<File | null>(null);
   const [lettreMotivation, setLettreMotivation] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [candidatureData, setCandidatureData] = useState<any>(null);
 
   useEffect(() => {
     const getCandidature = async () => {
       try {
         if (id) {
           const data = await fetchCandidatureById(id);
+          setCandidatureData(data);
           setSlogan(data.slogan || '');
         }
       } catch (err) {
@@ -52,62 +60,179 @@ const ModifierCandidature = () => {
     }
   };
 
+  const handleFileChange = (setter: (file: File | null) => void, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setter(file);
+  };
+
   return (
     <AppShell role="candidat" title="Modifier Candidature">
-      <div className="flex items-center justify-center py-4 px-4">
-          <form
-            onSubmit={handleSubmit}
-            className="w-full max-w-xl bg-white p-6 md:p-8 rounded-2xl shadow-lg space-y-6"
+      <div className="space-y-6">
+        {/* Header avec navigation */}
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/candidat/ma_candidature')}
+            className="flex items-center gap-2"
           >
-            <h1 className="text-2xl font-bold text-center text-blue-700 mb-4">
-              Modifier ma Candidature
-            </h1>
+            <ArrowLeft size={16} />
+            Retour
+          </Button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground">Modifier ma Candidature</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Mettez à jour les informations de votre candidature
+            </p>
+          </div>
+        </div>
 
-            <div>
-              <label className="font-medium text-gray-700">Slogan</label>
-              <input
-                type="text"
-                value={slogan}
-                onChange={(e) => setSlogan(e.target.value)}
-                required
-                className="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
-            </div>
+        {/* Informations actuelles */}
+        {candidatureData && (
+          <Card className="border border-blue-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Candidature actuelle
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Élection :</span>
+                  <p className="font-medium">{candidatureData.election?.titre || 'Non spécifiée'}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Date de soumission :</span>
+                  <p className="font-medium">
+                    {candidatureData.date_soumission
+                      ? new Date(candidatureData.date_soumission).toLocaleDateString('fr-FR')
+                      : 'Non spécifiée'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-            <div>
-              <label className="font-medium text-gray-700">
-                Nouveau programme (.pdf, .doc, .docx)
-              </label>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => setProgramme(e.target.files?.[0] || null)}
-                className="w-full mt-1"
-              />
-            </div>
+        {/* Formulaire de modification */}
+        <Card className="border border-blue-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Edit3 className="h-5 w-5" />
+              Modifier la candidature
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Slogan */}
+              <div className="space-y-2">
+                <Label htmlFor="slogan">Slogan *</Label>
+                <Input
+                  id="slogan"
+                  value={slogan}
+                  onChange={(e) => setSlogan(e.target.value)}
+                  placeholder="Votre nouveau slogan de campagne"
+                  required
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Le slogan est obligatoire et sera visible par les électeurs
+                </p>
+              </div>
 
-            <div>
-              <label className="font-medium text-gray-700">
-                Nouvelle lettre de motivation (.pdf, .doc, .docx)
-              </label>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => setLettreMotivation(e.target.files?.[0] || null)}
-                className="w-full mt-1"
-              />
-            </div>
+              {/* Programme */}
+              <div className="space-y-2">
+                <Label htmlFor="programme">Nouveau programme</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="programme"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => handleFileChange(setProgramme, e)}
+                    className="flex-1"
+                  />
+                  {programme && (
+                    <Badge variant="secondary" className="text-xs">
+                      {programme.name}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Formats acceptés : PDF, DOC, DOCX (max 2 Mo) - Optionnel
+                </p>
+              </div>
 
-            <div className="flex justify-center pt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold shadow-md"
-              >
-                {loading ? 'Enregistrement...' : '💾 Sauvegarder'}
-              </button>
+              {/* Lettre de motivation */}
+              <div className="space-y-2">
+                <Label htmlFor="lettre">Nouvelle lettre de motivation</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="lettre"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => handleFileChange(setLettreMotivation, e)}
+                    className="flex-1"
+                  />
+                  {lettreMotivation && (
+                    <Badge variant="secondary" className="text-xs">
+                      {lettreMotivation.name}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Formats acceptés : PDF, DOC, DOCX (max 2 Mo) - Optionnel
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-6 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate('/candidat/ma_candidature')}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Sauvegarde...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Sauvegarder
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Aide et informations */}
+        <Card className="border border-blue-100 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+              <div className="space-y-2 text-sm">
+                <p className="font-medium text-blue-900">Conseils pour une bonne candidature :</p>
+                <ul className="text-blue-800 space-y-1">
+                  <li>• Votre slogan doit être clair et mémorable</li>
+                  <li>• Le programme doit détailler vos propositions concrètes</li>
+                  <li>• La lettre de motivation peut renforcer votre dossier</li>
+                  <li>• Tous les documents seront vérifiés par l'administration</li>
+                </ul>
+              </div>
             </div>
-          </form>
+          </CardContent>
+        </Card>
       </div>
     </AppShell>
   );

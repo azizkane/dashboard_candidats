@@ -141,7 +141,7 @@ const CandidatePage = () => {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <Label htmlFor="name">Nom complet</Label>
+                    <Label htmlFor="name">Nom complet *</Label>
                     <Input
                       id="name"
                       value={candidateData.name}
@@ -150,7 +150,7 @@ const CandidatePage = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="party">Parti politique</Label>
+                    <Label htmlFor="party">Parti politique *</Label>
                     <Input
                       id="party"
                       value={candidateData.party}
@@ -186,7 +186,7 @@ const CandidatePage = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email *</Label>
                     <Input
                       id="email"
                       type="email"
@@ -209,7 +209,7 @@ const CandidatePage = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="program">Résumé du programme</Label>
+                  <Label htmlFor="program">Résumé du programme *</Label>
                   <Input
                     id="program"
                     value={candidateData.program}
